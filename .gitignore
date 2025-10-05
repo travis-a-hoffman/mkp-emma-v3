@@ -2,11 +2,13 @@
 
 # dependencies
 /node_modules
-package-lock.json
+
+# next.js
+/.next/
+/out/
 
 # production
 /build
-/dist
 
 # debug
 npm-debug.log*
@@ -22,8 +24,4 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next.config.mjs
-public
-
-api/_lib/generated
-api/mkpconnect/_lib/generated
+next-env.d.ts
