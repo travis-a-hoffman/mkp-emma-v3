@@ -20,6 +20,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# claude
+.claude
+
 # typescript
 *.tsbuildinfo
 next.config.mjs
