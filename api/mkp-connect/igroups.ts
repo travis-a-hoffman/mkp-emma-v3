@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
 
 import { PrismaMariaDb } from "@prisma/adapter-mariadb"
-import { PrismaClient } from "../_lib/generated/igroups-client"
+import { PrismaClient } from "../_lib/generated/igroups-client/index.js"
 import type {
   IGroup,
   IGroupClassField,
@@ -21,7 +21,7 @@ import type {
   IGroupAcceptsUninitiatedVisitorsField,
   IGroupMixedGenderField,
   IGroupContactUidField,
-} from "../_lib/generated/igroups-client"
+} from "../_lib/generated/igroups-client/index.js"
 
 // Load the types referenced in the queries?
 
