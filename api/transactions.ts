@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from "next"
+import type { VercelRequest, VercelResponse } from "@vercel/node"
 import { z } from "zod"
 import { supabase, isSupabaseConfigured } from "./_lib/supabase.js"
 
@@ -21,7 +21,7 @@ const TransactionSchema = z.object({
 
 const BulkTransactionSchema = z.array(TransactionSchema)
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*")
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
