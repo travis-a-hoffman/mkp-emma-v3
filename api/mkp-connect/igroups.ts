@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
+import * as os from "node:os"
 
 import { PrismaMariaDb } from "@prisma/adapter-mariadb"
 import { PrismaClient } from "../_lib/generated/igroups-client/index.js"
@@ -242,7 +243,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       count: connectIGroups.length,
     })
   } catch (e) {
-    console.error(e)
+    const networkInterfaces = os.networkInterfaces()
+    const ipv4Address = Object.values(networkInterfaces)
+      .flat()
+      .find((iface) => iface?.family === "IPv4" && !iface.internal)?.address
+
+    console.error(`Database query error from machine IP: ${ipv4Address}`, e)
     return res.status(500).json({
       success: false,
       error: "An error occurred while querying the database: " + e,
