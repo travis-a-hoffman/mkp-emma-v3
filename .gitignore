@@ -30,3 +30,5 @@ public
 
 api/_lib/generated
 api/mkpconnect/_lib/generated
+scripts/data
+scripts/geojson-data
