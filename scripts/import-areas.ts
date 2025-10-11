@@ -24,7 +24,7 @@ interface ImportedArea {
   finance_coordinator_id: string | null
 
   // JSON fields
-  geo_polygon: any | null
+  geo_json: any | null
 
   // Timestamps
   created_at: string
@@ -175,8 +175,8 @@ async function main() {
       }
     }
 
-    // Check if area already exists
-    const { data: existingArea } = await supabase.from("areas").select("id, code").eq("code", area.code).single()
+    // Check if area already exists (by id since code may be null)
+    const { data: existingArea } = await supabase.from("areas").select("id, name").eq("id", area.id).single()
 
     if (existingArea && !force) {
       console.log(`  ⊘ Skipped: ${filename} (${area.name}) - already exists (use --force to update)`)
@@ -190,17 +190,18 @@ async function main() {
         .from("areas")
         .update({
           name: area.name,
+          code: area.code,
           description: area.description,
           color: area.color,
           is_active: area.is_active,
           image_url: area.image_url,
           steward_id: area.steward_id,
           finance_coordinator_id: area.finance_coordinator_id,
-          geo_polygon: area.geo_polygon,
+          geo_json: area.geo_json,
           deleted_at: area.deleted_at,
           updated_at: new Date().toISOString(),
         })
-        .eq("code", area.code)
+        .eq("id", area.id)
 
       if (updateError) {
         console.error(`  ✗ Error updating ${filename}: ${updateError.message}`)
@@ -249,7 +250,7 @@ async function main() {
           image_url: area.image_url,
           steward_id: area.steward_id,
           finance_coordinator_id: area.finance_coordinator_id,
-          geo_polygon: area.geo_polygon,
+          geo_json: area.geo_json,
           created_at: area.created_at,
           updated_at: area.updated_at,
           deleted_at: area.deleted_at,

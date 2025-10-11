@@ -79,7 +79,7 @@ export default function AdminAreas() {
   const displayedAreas = creatingArea && !showArchived ? [creatingArea, ...filteredAreas] : filteredAreas
 
   const createNationalOverviewMapData = () => {
-    const areasWithGeo = filteredAreas.filter((area) => area.geo_polygon)
+    const areasWithGeo = filteredAreas.filter((area) => area.geo_json)
 
     if (areasWithGeo.length === 0) return null
 
@@ -87,19 +87,19 @@ export default function AdminAreas() {
 
     const features = areasWithGeo
       .map((area) => {
-        console.log("[v0] Processing area:", area.name, "geo_polygon type:", typeof area.geo_polygon)
+        console.log("[v0] Processing area:", area.name, "geo_json type:", typeof area.geo_json)
 
         let geometry
-        if (area.geo_polygon.type === "FeatureCollection") {
+        if (area.geo_json.type === "FeatureCollection") {
           // Extract the first feature's geometry from the FeatureCollection
-          geometry = area.geo_polygon.features?.[0]?.geometry
+          geometry = area.geo_json.features?.[0]?.geometry
           console.log("[v0] Extracted geometry from FeatureCollection for area:", area.name)
-        } else if (area.geo_polygon.type === "Polygon") {
+        } else if (area.geo_json.type === "Polygon") {
           // Use the polygon directly
-          geometry = area.geo_polygon
+          geometry = area.geo_json
           console.log("[v0] Using direct Polygon for area:", area.name)
         } else {
-          console.warn("[v0] Unknown geo_polygon type for area:", area.name, area.geo_polygon.type)
+          console.warn("[v0] Unknown geo_json type for area:", area.name, area.geo_json.type)
           return null
         }
 
@@ -149,7 +149,7 @@ export default function AdminAreas() {
         description: area.description,
         steward_id: area.steward_id,
         finance_coordinator_id: area.finance_coordinator_id,
-        geo_polygon: area.geo_polygon,
+        geo_json: area.geo_json,
         image_url: area.image_url,
         is_active: area.is_active,
       },
@@ -169,7 +169,7 @@ export default function AdminAreas() {
       description: null,
       steward_id: null,
       finance_coordinator_id: null,
-      geo_polygon: null,
+      geo_json: null,
       image_url: null,
       is_active: true,
       created_at: new Date().toISOString(),
@@ -187,7 +187,7 @@ export default function AdminAreas() {
         description: "",
         steward_id: null,
         finance_coordinator_id: null,
-        geo_polygon: null,
+        geo_json: null,
         image_url: null,
         is_active: true,
       },
@@ -252,7 +252,7 @@ export default function AdminAreas() {
         description: formData.description || null,
         steward_id: formData.steward_id || null,
         finance_coordinator_id: formData.finance_coordinator_id || null,
-        geo_polygon: formData.geo_polygon || null,
+        geo_json: formData.geo_json || null,
         image_url: formData.image_url || null,
         color: formData.color || null,
         is_active: formData.is_active ?? true,
@@ -767,13 +767,13 @@ export default function AdminAreas() {
                     <Map className="w-5 h-5 text-blue-600" />
                     <h3 className="text-lg font-semibold text-gray-900">National Overview Map</h3>
                     <Badge variant="outline" className="text-xs">
-                      {filteredAreas.filter((area) => area.geo_polygon).length} areas
+                      {filteredAreas.filter((area) => area.geo_json).length} areas
                     </Badge>
                   </div>
                   <GoogleMap
                     geoPolygon={nationalOverviewMapData}
                     className="w-full aspect-video rounded border border-gray-300"
-                    key={`national-overview-${filteredAreas.filter((area) => area.geo_polygon).length}`}
+                    key={`national-overview-${filteredAreas.filter((area) => area.geo_json).length}`}
                   />
                 </div>
               )}
@@ -1166,14 +1166,14 @@ export default function AdminAreas() {
                                       Geographic Polygon (JSON)
                                     </label>
                                     <Textarea
-                                      value={formData.geo_polygon ? JSON.stringify(formData.geo_polygon, null, 2) : ""}
+                                      value={formData.geo_json ? JSON.stringify(formData.geo_json, null, 2) : ""}
                                       onChange={(e) => {
                                         try {
                                           const parsed = e.target.value ? JSON.parse(e.target.value) : null
-                                          updateFormData(area.id, "geo_polygon", parsed)
+                                          updateFormData(area.id, "geo_json", parsed)
                                         } catch {
                                           // Invalid JSON, keep the string value for now
-                                          updateFormData(area.id, "geo_polygon", e.target.value)
+                                          updateFormData(area.id, "geo_json", e.target.value)
                                         }
                                       }}
                                       placeholder="Enter GeoJSON polygon data"
@@ -1362,11 +1362,11 @@ export default function AdminAreas() {
                                       </div>
                                     </div>
                                   </div>
-                                  {area.geo_polygon && (
+                                  {area.geo_json && (
                                     <div>
                                       <h4 className="font-medium text-gray-900 mb-2">Geographic Data</h4>
                                       <GoogleMap
-                                        geoPolygon={area.geo_polygon}
+                                        geoPolygon={area.geo_json}
                                         className="w-full h-128 rounded border border-gray-300"
                                       />
                                     </div>

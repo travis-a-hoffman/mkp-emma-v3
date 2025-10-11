@@ -24,7 +24,7 @@ interface ExportedArea {
   finance_coordinator_id: string | null
 
   // JSON fields
-  geo_polygon: any | null
+  geo_json: any | null
 
   // Timestamps
   created_at: string
@@ -154,7 +154,7 @@ async function main() {
       image_url: area.image_url,
       steward_id: area.steward_id,
       finance_coordinator_id: area.finance_coordinator_id,
-      geo_polygon: area.geo_polygon,
+      geo_json: area.geo_json,
       created_at: area.created_at,
       updated_at: area.updated_at,
       deleted_at: area.deleted_at,

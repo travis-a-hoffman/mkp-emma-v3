@@ -9,7 +9,8 @@ create table public.communities (
   is_active boolean not null default true,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
-  geo_polygon jsonb null,
+  geo_json jsonb null,
+  geo_definition jsonb null,
   color text null default '#10B981'::text,
   deleted_at timestamp with time zone null,
   constraint communities_pkey primary key (id),
@@ -26,4 +27,4 @@ create index IF not exists idx_communities_code on public.communities using btre
 
 create index IF not exists idx_communities_is_active on public.communities using btree (is_active) TABLESPACE pg_default;
 
-create index IF not exists idx_communities_geo_polygon on public.communities using gin (geo_polygon) TABLESPACE pg_default;
+create index IF not exists idx_communities_geo_json on public.communities using gin (geo_json) TABLESPACE pg_default;

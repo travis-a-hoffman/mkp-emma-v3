@@ -225,6 +225,12 @@ importers:
         specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
+      '@turf/dissolve':
+        specifier: ^7.2.0
+        version: 7.2.0
+      '@turf/flatten':
+        specifier: ^7.2.0
+        version: 7.2.0
       '@turf/helpers':
         specifier: ^7.2.0
         version: 7.2.0
@@ -2080,8 +2086,17 @@ packages:
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
 
+  '@turf/dissolve@7.2.0':
+    resolution: {integrity: sha512-gPG5TE3mAYuZqBut8tPYCKwi4hhx5Cq0ALoQMB9X0hrVtFIKrihrsj98XQM/5pL/UIpAxQfwisQvy6XaOFaoPA==}
+
+  '@turf/flatten@7.2.0':
+    resolution: {integrity: sha512-q38Qsqr4l7mxp780zSdn0gp/WLBX+sa+gV6qIbDQ1HKCrrPK8QQJmNx7gk1xxEXVot6tq/WyAPysCQdX+kLmMA==}
+
   '@turf/helpers@7.2.0':
     resolution: {integrity: sha512-cXo7bKNZoa7aC7ydLmUR02oB3IgDe7MxiPuRz3cCtYQHn+BJ6h1tihmamYDWWUlPHgSNF0i3ATc4WmDECZafKw==}
+
+  '@turf/invariant@7.2.0':
+    resolution: {integrity: sha512-kV4u8e7Gkpq+kPbAKNC21CmyrXzlbBgFjO1PhrHPgEdNqXqDawoZ3i6ivE3ULJj2rSesCjduUaC/wyvH/sNr2Q==}
 
   '@turf/meta@7.2.0':
     resolution: {integrity: sha512-igzTdHsQc8TV1RhPuOLVo74Px/hyPrVgVOTgjWQZzt3J9BVseCdpfY/0cJBdlSRI4S/yTmmHl7gAqjhpYH5Yaw==}
@@ -6909,8 +6924,31 @@ snapshots:
 
   '@tsconfig/node16@1.0.4': {}
 
+  '@turf/dissolve@7.2.0':
+    dependencies:
+      '@turf/flatten': 7.2.0
+      '@turf/helpers': 7.2.0
+      '@turf/invariant': 7.2.0
+      '@turf/meta': 7.2.0
+      '@types/geojson': 7946.0.16
+      polyclip-ts: 0.16.8
+      tslib: 2.8.1
+
+  '@turf/flatten@7.2.0':
+    dependencies:
+      '@turf/helpers': 7.2.0
+      '@turf/meta': 7.2.0
+      '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
   '@turf/helpers@7.2.0':
     dependencies:
+      '@types/geojson': 7946.0.16
+      tslib: 2.8.1
+
+  '@turf/invariant@7.2.0':
+    dependencies:
+      '@turf/helpers': 7.2.0
       '@types/geojson': 7946.0.16
       tslib: 2.8.1
 

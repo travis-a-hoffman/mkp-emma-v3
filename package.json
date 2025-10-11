@@ -22,8 +22,11 @@
     "export:mkp-community-zipcodes": "tsx scripts/export-mkp-community-zipcodes.ts",
     "fill:mkp-area-counties": "tsx scripts/fill-mkp-area-counties.ts",
     "add:zipcode-geojson": "tsx scripts/add-zipcode-geojson.ts",
-    "generate:areas": "tsx scripts/generate-areas-from-zipcodes.ts",
     "generate:communities": "tsx scripts/generate-communities-from-zipcodes.ts",
+    "assign:area-codes": "tsx scripts/assign-area-codes.ts",
+    "assign:community-codes": "tsx scripts/assign-community-codes.ts",
+    "define:areas": "tsx scripts/define-areas.ts",
+    "generate:areas-geojson": "tsx scripts/generate-areas-geojson.ts",
     "export:people": "tsx scripts/export-people.ts",
     "import:people": "tsx scripts/import-people.ts",
     "export:venues": "tsx scripts/export-venues.ts",
@@ -104,6 +107,8 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@turf/dissolve": "^7.2.0",
+    "@turf/flatten": "^7.2.0",
     "@turf/helpers": "^7.2.0",
     "@turf/union": "^7.2.0",
     "@types/cors": "^2.8.19",

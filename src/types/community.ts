@@ -5,7 +5,8 @@ export interface Community {
   description?: string | null
   area_id?: string | null
   coordinator_id?: string | null
-  geo_polygon?: any
+  geo_json?: any
+  geo_definition?: any
   image_url?: string | null
   color?: string | null
   is_active: boolean

@@ -1,12 +1,87 @@
 #!/usr/bin/env tsx
 
 import * as fs from "node:fs/promises"
+import * as fsSync from "node:fs"
 import * as path from "node:path"
 import { config } from "dotenv"
 import { fileURLToPath } from "node:url"
+import https from "node:https"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+const GEOJSON_URL = "https://raw.githubusercontent.com/ndrezn/zip-code-geojson/main/usa_zip_codes_geo_100m.json"
+
+async function downloadGeoJSONIfMissing(geojsonPath: string): Promise<void> {
+  // Check if file already exists
+  try {
+    await fs.access(geojsonPath)
+    console.log(`GeoJSON file already exists at: ${geojsonPath}`)
+    return
+  } catch {
+    // File doesn't exist, proceed with download
+  }
+
+  console.log(`GeoJSON file not found. Downloading from GitHub...`)
+  console.log(`URL: ${GEOJSON_URL}`)
+  console.log(`This is a ~100MB file and may take a minute...\n`)
+
+  // Ensure directory exists
+  const geojsonDir = path.dirname(geojsonPath)
+  await fs.mkdir(geojsonDir, { recursive: true })
+
+  return new Promise((resolve, reject) => {
+    https
+      .get(GEOJSON_URL, (response) => {
+        if (response.statusCode === 302 || response.statusCode === 301) {
+          // Handle redirect
+          const redirectUrl = response.headers.location
+          if (!redirectUrl) {
+            reject(new Error("Redirect received but no location header"))
+            return
+          }
+          https
+            .get(redirectUrl, (redirectResponse) => {
+              if (redirectResponse.statusCode !== 200) {
+                reject(new Error(`Download failed with status: ${redirectResponse.statusCode}`))
+                return
+              }
+              const fileStream = fsSync.createWriteStream(geojsonPath)
+              redirectResponse.pipe(fileStream)
+
+              fileStream.on("finish", () => {
+                fileStream.close()
+                console.log(`✓ Download complete: ${geojsonPath}\n`)
+                resolve()
+              })
+
+              fileStream.on("error", (err) => {
+                fs.unlink(geojsonPath).catch(() => {}) // Clean up partial download
+                reject(err)
+              })
+            })
+            .on("error", reject)
+        } else if (response.statusCode === 200) {
+          const fileStream = fsSync.createWriteStream(geojsonPath)
+          response.pipe(fileStream)
+
+          fileStream.on("finish", () => {
+            fileStream.close()
+            console.log(`✓ Download complete: ${geojsonPath}\n`)
+            resolve()
+          })
+
+          fileStream.on("error", (err) => {
+            fs.unlink(geojsonPath).catch(() => {}) // Clean up partial download
+            reject(err)
+          })
+        } else {
+          reject(new Error(`Download failed with status: ${response.statusCode}`))
+        }
+      })
+      .on("error", reject)
+  })
+}
 
 interface ExportedZipcode {
   zipcode: string
@@ -16,7 +91,7 @@ interface ExportedZipcode {
   community: string | null
   latitude: number | null
   longitude: number | null
-  geo_polygon?: any
+  geo_json?: any
 }
 
 interface GeoJSONFeature {
@@ -104,8 +179,19 @@ async function main() {
     console.log(`⚠️  DRY RUN MODE: No files will be modified\n`)
   }
 
-  // Load GeoJSON data
+  // Download GeoJSON data if missing
   const geojsonPath = path.join(__dirname, "geojson-data", "usa_zip_codes_geo_100m.json")
+
+  try {
+    await downloadGeoJSONIfMissing(geojsonPath)
+  } catch (error: any) {
+    console.error(`Error downloading GeoJSON file: ${error.message}`)
+    console.error(`Please try downloading manually from: ${GEOJSON_URL}`)
+    console.error(`And save it to: ${geojsonPath}`)
+    process.exit(1)
+  }
+
+  // Load GeoJSON data
   console.log(`Loading GeoJSON data from: ${geojsonPath}`)
 
   let geojsonData: GeoJSONFeatureCollection
@@ -114,12 +200,7 @@ async function main() {
     geojsonData = JSON.parse(geojsonContent)
   } catch (error: any) {
     console.error(`Error loading GeoJSON file: ${error.message}`)
-    console.error(
-      `Please ensure the GeoJSON data exists at: ${geojsonPath}`
-    )
-    console.error(
-      `You can download it from: https://raw.githubusercontent.com/ndrezn/zip-code-geojson/main/usa_zip_codes_geo_100m.json`
-    )
+    console.error(`File path: ${geojsonPath}`)
     process.exit(1)
   }
 
@@ -191,9 +272,9 @@ async function main() {
 
       processedCount++
 
-      // Skip if geo_polygon already exists
-      if (zipcodeData.geo_polygon !== undefined && zipcodeData.geo_polygon !== null) {
-        console.log(`  ⊘ Skipped: ${filename} - geo_polygon already set`)
+      // Skip if geo_json already exists
+      if (zipcodeData.geo_json !== undefined && zipcodeData.geo_json !== null) {
+        console.log(`  ⊘ Skipped: ${filename} - geo_json already set`)
         skippedCount++
         continue
       }
@@ -207,21 +288,21 @@ async function main() {
         continue
       }
 
-      // Update the geo_polygon field
+      // Update the geo_json field
       const updatedData: ExportedZipcode = {
         ...zipcodeData,
-        geo_polygon: geometry,
+        geo_json: geometry,
       }
 
       if (dryRun) {
-        console.log(`  [DRY RUN] Would update: ${filename} - added geo_polygon`)
+        console.log(`  [DRY RUN] Would update: ${filename} - added geo_json`)
         updatedCount++
       } else {
         // Write the updated data back to the file
         const jsonContent = JSON.stringify(updatedData)
         await fs.writeFile(filepath, jsonContent, "utf-8")
 
-        console.log(`  ✓ Updated: ${filename} - added geo_polygon`)
+        console.log(`  ✓ Updated: ${filename} - added geo_json`)
         updatedCount++
       }
     }
@@ -229,7 +310,7 @@ async function main() {
     console.log(`\n📊 ${dataset.label} Summary:`)
     console.log(`  Total files processed: ${processedCount}`)
     console.log(`  ✓ Updated: ${updatedCount}`)
-    console.log(`  ⊘ Skipped (already has geo_polygon): ${skippedCount}`)
+    console.log(`  ⊘ Skipped (already has geo_json): ${skippedCount}`)
     console.log(`  ⚠ Not found in GeoJSON data: ${notFoundCount}`)
     if (errorCount > 0) console.log(`  ✗ Errors: ${errorCount}`)
   }

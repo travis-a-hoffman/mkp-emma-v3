@@ -24,7 +24,7 @@ interface ExportedCommunity {
   coordinator_id: string | null
 
   // JSON fields
-  geo_polygon: any | null
+  geo_json: any | null
 
   // Timestamps
   created_at: string
@@ -134,7 +134,7 @@ async function main() {
       is_active: community.is_active,
       area_id: community.area_id,
       coordinator_id: community.coordinator_id,
-      geo_polygon: community.geo_polygon,
+      geo_json: community.geo_json,
       created_at: community.created_at,
       updated_at: community.updated_at,
       deleted_at: community.deleted_at,

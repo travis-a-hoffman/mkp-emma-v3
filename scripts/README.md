@@ -81,8 +81,8 @@ pnpm export:venues --pretty
 **What each exports:**
 
 - **Addresses:** All address fields (address_1, address_2, city, state, postal_code, country) and timestamps
-- **Areas:** All area fields, timestamps, foreign keys (steward_id, finance_coordinator_id), geo_polygon, and related `area_admins` data
-- **Communities:** All community fields, timestamps, foreign keys (area_id, coordinator_id), and geo_polygon
+- **Areas:** All area fields, timestamps, foreign keys (steward_id, finance_coordinator_id), geo_json, and related `area_admins` data
+- **Communities:** All community fields, timestamps, foreign keys (area_id, coordinator_id), and geo_json
 - **People:** All people fields, timestamps, foreign keys (billing_address_id, mailing_address_id, physical_address_id), notes, photo_url
   - **Filtering options** (additive):
     - `--areas`: Export only people referenced by areas (steward_id, finance_coordinator_id, area_admins)
@@ -194,7 +194,7 @@ The scripts work with the following tables:
 - image_url (text)
 - steward_id (uuid, FK to people)
 - finance_coordinator_id (uuid, FK to people)
-- geo_polygon (jsonb)
+- geo_json (jsonb)
 - created_at (timestamp)
 - updated_at (timestamp)
 - deleted_at (timestamp)
@@ -215,7 +215,7 @@ The scripts work with the following tables:
 - coordinator_id (uuid, FK to people)
 - image_url (text)
 - is_active (boolean)
-- geo_polygon (jsonb)
+- geo_json (jsonb)
 - color (text)
 - created_at (timestamp)
 - updated_at (timestamp)
@@ -402,33 +402,89 @@ MKP Connect (MariaDB)
    - Adds GeoJSON polygon geometry to zipcode files
    - Source: Downloads 100m resolution data from ndrezn/zip-code-geojson GitHub repository
    - Data file: `scripts/geojson-data/usa_zip_codes_geo_100m.json` (100MB, gitignored)
-   - Adds: `geo_polygon` field with polygon coordinates to each zipcode
+   - Adds: `geo_json` field with polygon coordinates to each zipcode
    - Processes: Selectable via `--areas` and/or `--communities` flags
 
-5. **`generate-areas-from-zipcodes.ts`**
-   - Aggregates zipcodes by area name to create Area entities
+5. **`generate-areas-from-zipcodes.ts`** *(Legacy - use for initial zipcode-based generation)*
+   - Aggregates zipcodes by area name to create Area entities from MKP Connect data
    - Groups: All zipcodes sharing the same `area` value
-   - Merges: Uses `@turf/union` to combine all zipcode polygons into single Area polygon
+   - Merges: Uses `@turf/dissolve` to combine all zipcode polygons into single Area polygon
    - Wraps: Geometry in proper GeoJSON FeatureCollection format
-   - Generates: Complete Area objects with id, name, code, geo_polygon, timestamps
+   - Generates: Complete Area objects with id, name, code=null, geo_json, timestamps
    - Output: `scripts/data/{hostname}/areas/{area-code}.json`
+   - **Use case**: Initial migration from MKP Connect zipcode data
 
-6. **`generate-communities-from-zipcodes.ts`**
-   - Aggregates zipcodes by community name to create Community entities
+6. **`generate-communities-from-zipcodes.ts`** *(Legacy - use for initial zipcode-based generation)*
+   - Aggregates zipcodes by community name to create Community entities from MKP Connect data
    - Groups: All zipcodes sharing the same `community` value
-   - Merges: Uses `@turf/union` to combine all zipcode polygons into single Community polygon
+   - Merges: Uses `@turf/dissolve` to combine all zipcode polygons into single Community polygon
    - Wraps: Geometry in proper GeoJSON FeatureCollection format
    - Links: Sets `area_id` by looking up generated Area entities
-   - Generates: Complete Community objects with id, name, code, area_id, geo_polygon, timestamps
+   - Generates: Complete Community objects with id, name, code=null, area_id, geo_json, timestamps
    - Output: `scripts/data/{hostname}/communities/{community-code}.json`
+   - **Use case**: Initial migration from MKP Connect zipcode data
 
-7. **Standard Import Scripts**
-   - `import-areas.ts` - Imports generated Area files to Supabase
-   - `import-communities.ts` - Imports generated Community files to Supabase
+7. **`assign-area-codes.ts`**
+   - Interactive script to assign short codes (≤6 chars) to Areas
+   - Suggests: State abbreviations, airport codes, or acronyms
+   - Prompts: Accept (Enter), Override, Skip (s), Quit (q)
+   - Updates: Area JSON files with assigned codes
+   - **Use case**: After generating areas, before importing to database
+
+8. **`assign-community-codes.ts`**
+   - Interactive script to assign short codes (≤6 chars) to Communities
+   - Suggests: Airport codes or acronyms
+   - Prompts: Accept (Enter), Override, Skip (s), Quit (q)
+   - Updates: Community JSON files with assigned codes
+   - **Use case**: After generating communities, before importing to database
+
+9. **`define-areas.ts`**
+   - Interactive script to define geographic boundaries for Areas using states, counties, and zipcodes
+   - Downloads GeoJSON data for states, counties, and zipcodes if missing
+   - Validates: User input against GeoJSON data
+   - Supports: Add (+) and subtract (-) operators (e.g., `+Colorado`, `-Montezuma, CO`, `+79901`)
+   - Updates: Area JSON files with `geo_definition` field
+   - **Use case**: After assigning codes, to manually define/refine area boundaries
+   - **Format**:
+     ```json
+     {
+       "geo_definition": {
+         "states": ["+Colorado"],
+         "counties": ["-Montezuma, CO", "-La Plata, CO"],
+         "zipcodes": ["+79901", "+79902"]
+       }
+     }
+     ```
+
+10. **`generate-areas-geojson.ts`** *(Recommended - use after defining geo_definition)*
+    - Generates `geo_json` field from `geo_definition` in Area JSON files
+    - Reads: Area JSON files with `geo_definition`
+    - Processes: States, counties, and zipcodes with +/- operators
+    - Merges: Uses two-stage `@turf/dissolve` algorithm to create clean boundaries
+      - Stage 1: Flatten and union each MultiPolygon into single geometry
+      - Stage 1.5: Flatten any remaining MultiPolygons into Polygons
+      - Stage 2: Dissolve all polygons together into area boundary
+    - Wraps: Geometry in proper GeoJSON FeatureCollection format
+    - Updates: Area JSON files with generated `geo_json`
+    - **Use case**: After defining geo_definition, to generate final area boundaries
+    - **Advantages**: More flexible than zipcode-only approach, supports state/county-level definitions
+
+11. **Standard Import Scripts**
+    - `import-areas.ts` - Imports generated Area files to Supabase
+    - `import-communities.ts` - Imports generated Community files to Supabase
 
 ### Complete Workflow
 
-Follow this exact order to migrate and enhance geographic data:
+There are two approaches to generating Area GeoJSON data:
+
+1. **Zipcode-based approach (Legacy)**: Aggregate zipcodes from MKP Connect into areas
+2. **Definition-based approach (Recommended)**: Define areas using states/counties/zipcodes with +/- operators
+
+---
+
+## Approach 1: Zipcode-based Generation (Legacy)
+
+Use this for **initial migration** from MKP Connect zipcode data.
 
 #### Phase 1: Export from MKP Connect
 
@@ -456,7 +512,7 @@ MKPCONNECT_CIVICRM_DB_NAME=connect_civicrm
 
 ```bash
 # Fill in missing county names
-pnpm fill:mkp-area-counties
+pnpm fill:mkp-area-counties .env.mkpconnect
 
 # Add GeoJSON polygons to zipcode files
 # Downloads 100m resolution data if not present
@@ -465,7 +521,7 @@ pnpm add:zipcode-geojson --areas --communities
 
 **What happens**:
 - County enhancement: Looks up county names via zipcodes-us package, updates files in-place
-- GeoJSON enhancement: Adds `geo_polygon` field with polygon coordinates to each zipcode
+- GeoJSON enhancement: Adds `geo_json` field with polygon coordinates to each zipcode
 
 **Options**:
 ```bash
@@ -481,7 +537,7 @@ pnpm add:zipcode-geojson --communities    # Only community-zipcodes
 pnpm fill:mkp-area-counties --host mkpconnect.org
 ```
 
-#### Phase 3: Generate Emma Entities
+#### Phase 3: Generate Emma Entities (from Zipcodes)
 
 ```bash
 # Generate Areas (must run first - Communities depend on Areas)
@@ -498,16 +554,16 @@ pnpm generate:communities
 **What happens**:
 1. **Areas**:
    - Groups all zipcodes by area name
-   - Merges polygons using turf.js union
+   - Merges polygons using turf.js dissolve
    - Wraps in FeatureCollection format
-   - Generates UUIDs, codes, timestamps
+   - Generates UUIDs, code=null, timestamps
 
 2. **Communities**:
    - Groups all zipcodes by community name
-   - Merges polygons using turf.js union
+   - Merges polygons using turf.js dissolve
    - Wraps in FeatureCollection format
    - Looks up area_id from generated Area files
-   - Generates UUIDs, codes, timestamps
+   - Generates UUIDs, code=null, timestamps
 
 **Options**:
 ```bash
@@ -524,7 +580,23 @@ pnpm generate:areas --source-host mkpconnect.org --target-host mkp-emma-v3.verce
 pnpm generate:communities --source-host mkpconnect.org --target-host mkp-emma-v3.vercel.app
 ```
 
-#### Phase 4: Import to Emma v3
+#### Phase 4: Assign Codes
+
+```bash
+# Assign codes to areas (interactive)
+pnpm assign:area-codes --host mkp-emma-v3.vercel.app
+
+# Assign codes to communities (interactive)
+pnpm assign:community-codes --host mkp-emma-v3.vercel.app
+```
+
+**What happens**:
+- Script walks through each area/community
+- Suggests code based on name (state abbreviation, airport code, or acronym)
+- Prompts: Accept (Enter), Override, Skip (s), Quit (q)
+- Updates JSON files with assigned codes
+
+#### Phase 5: Import to Emma v3
 
 ```bash
 # Import Areas first (Communities depend on them)
@@ -545,6 +617,152 @@ HOSTNAME=mkp-emma-v3.vercel.app
 - Validates foreign key references (Communities → Areas)
 - Skips duplicates by default (match on `code` field)
 - Use `--force` to update existing records
+
+---
+
+## Approach 2: Definition-based Generation (Recommended)
+
+Use this for **manual refinement** or **new areas** defined by states/counties/zipcodes.
+
+### Prerequisites
+
+Area JSON files must already exist (either from Approach 1 or created manually).
+
+### Workflow
+
+#### Step 1: Define Area Boundaries (Interactive)
+
+```bash
+# Define all areas
+pnpm define:areas --host mkp-emma-v3.vercel.app
+
+# Define specific area
+pnpm define:areas --area colorado --host mkp-emma-v3.vercel.app
+```
+
+**What happens**:
+- Script downloads GeoJSON data for states, counties, and zipcodes (if missing)
+- Walks through each area interactively
+- Prompts for states, counties, and zipcodes to include (+) or exclude (-)
+- Saves `geo_definition` field to area JSON files
+
+**Example interaction**:
+```
+Area: Colorado (COLO)
+Current geo_definition: (none)
+
+Modify geo_definition? (y/n): y
+
+--- STATES ---
+Enter state names with "+" to add or "-" to subtract
+Type "done" when finished, "clear" to reset
+State: +Colorado
+  ✓ Added: +Colorado
+State: done
+
+--- COUNTIES ---
+Enter counties as "County Name, ST" with "+" to add or "-" to subtract
+Type "done" when finished, "clear" to reset
+County: -Montezuma, CO
+  ✓ Added: -Montezuma, CO
+County: -La Plata, CO
+  ✓ Added: -La Plata, CO
+County: done
+
+--- ZIPCODES ---
+Enter 5-digit zipcodes with "+" to add or "-" to subtract
+Type "done" when finished, "clear" to reset
+Zipcode: done
+
+✓ Saved geo_definition:
+  States: +Colorado
+  Counties: -Montezuma, CO, -La Plata, CO
+  Zipcodes: (none)
+```
+
+**Result**:
+```json
+{
+  "geo_definition": {
+    "states": ["+Colorado"],
+    "counties": ["-Montezuma, CO", "-La Plata, CO"],
+    "zipcodes": []
+  }
+}
+```
+
+#### Step 2: Generate GeoJSON from Definition
+
+```bash
+# Generate geo_json for all areas with geo_definition
+pnpm generate:areas-geojson --host mkp-emma-v3.vercel.app
+
+# Generate for specific area
+pnpm generate:areas-geojson --area colorado --host mkp-emma-v3.vercel.app
+
+# Preview without modifying files
+pnpm generate:areas-geojson --dry-run --host mkp-emma-v3.vercel.app
+```
+
+**What happens**:
+- Reads area JSON files with `geo_definition`
+- Downloads GeoJSON data for states, counties, and zipcodes (if missing)
+- Collects geometries based on +/- operators
+- Merges geometries using three-stage dissolve algorithm:
+  1. **Stage 1**: Flatten and union each MultiPolygon into single geometry
+  2. **Stage 1.5**: Flatten any remaining MultiPolygons into Polygons
+  3. **Stage 2**: Dissolve all polygons together into clean area boundary
+- Updates `geo_json` field in area JSON files
+
+**Example output**:
+```
+============================================================
+Area: Colorado (COLO)
+============================================================
+  + Added state: Colorado
+  - Excluded county: Montezuma, CO
+  - Excluded county: La Plata, CO
+
+  Processing 1 geometries...
+  Stage 1: Unifying individual geometries...
+  Stage 1.5: Flattening any MultiPolygons into Polygons...
+  Stage 2: Dissolving 48 polygons into area boundary...
+  ✓ Created boundary with 1 polygon(s)
+  ✓ Updated: colorado.json
+```
+
+**Options**:
+```bash
+# Pretty formatted JSON output
+pnpm generate:areas-geojson --pretty
+
+# Preview without writing
+pnpm generate:areas-geojson --dry-run
+
+# Filter by area name
+pnpm generate:areas-geojson --area "new york"
+
+# Custom hostname
+pnpm generate:areas-geojson --host mkp-emma-v3.vercel.app
+```
+
+#### Step 3: Import to Emma v3
+
+```bash
+# Import areas (with --force to update existing)
+pnpm import:areas .env.emma-v3 --force
+
+# Or import communities
+pnpm import:communities .env.emma-v3 --force
+```
+
+### Advantages of Definition-based Approach
+
+1. **More flexible**: Define areas by entire states, counties, or specific zipcodes
+2. **Easier refinement**: Use subtract operator to exclude specific counties/zipcodes
+3. **Cleaner boundaries**: No need to manage thousands of individual zipcode files
+4. **Better version control**: Small, readable `geo_definition` in JSON files
+5. **Reproducible**: Can regenerate `geo_json` from `geo_definition` at any time
 
 ### Technical Details
 
@@ -567,7 +785,7 @@ scripts/data/
 **Zipcode files** (intermediate data):
 ```json
 {
-  "geo_polygon": {
+  "geo_json": {
     "type": "Polygon",
     "coordinates": [[[lon, lat], ...]]
   }
@@ -577,7 +795,7 @@ scripts/data/
 **Area/Community files** (final format):
 ```json
 {
-  "geo_polygon": {
+  "geo_json": {
     "type": "FeatureCollection",
     "features": [{
       "type": "Feature",
@@ -614,7 +832,7 @@ The FeatureCollection format is the proper GeoJSON standard and matches Emma v2'
   image_url: null         // No source data
   steward_id: null        // No source data
   finance_coordinator_id: null  // No source data
-  geo_polygon: {...}      // Merged FeatureCollection
+  geo_json: {...}      // Merged FeatureCollection
   created_at: string      // Current timestamp
   updated_at: string      // Current timestamp
   deleted_at: null        // No source data
@@ -634,7 +852,7 @@ The FeatureCollection format is the proper GeoJSON standard and matches Emma v2'
   is_active: true         // Default
   area_id: string         // Looked up from Area by name
   coordinator_id: null    // No source data
-  geo_polygon: {...}      // Merged FeatureCollection
+  geo_json: {...}      // Merged FeatureCollection
   created_at: string      // Current timestamp
   updated_at: string      // Current timestamp
   deleted_at: null        // No source data
@@ -698,11 +916,20 @@ Based on current MKP Connect data:
 ### Dependencies
 
 **npm packages**:
+- `@turf/dissolve` - Polygon dissolving operations (used in generate-areas-geojson.ts)
+- `@turf/flatten` - Flatten MultiPolygon geometries into individual Polygons
 - `@turf/union` - Polygon merging and union operations
-- `@turf/helpers` - GeoJSON helper functions
+- `@turf/helpers` - GeoJSON helper functions (featureCollection, etc.)
 - `zipcodes-us` - US ZIP code to county/location lookup
 - `mariadb` - MariaDB database connection
 - `@supabase/supabase-js` - Supabase database connection
+- `dotenv` - Environment variable management
+- `readline` - Interactive command-line prompts (used in define-areas.ts)
+- `https` - HTTP client for downloading GeoJSON data
 
 **External data**:
+- eric.clst.org - 5m resolution US state and county boundaries (used in define-areas.ts, generate-areas-geojson.ts)
+  - States: `gz_2010_us_040_00_5m.json`
+  - Counties: `gz_2010_us_050_00_5m.json`
 - ndrezn/zip-code-geojson - 100m resolution US ZIP code boundaries (MIT/Creative Commons)
+  - File: `usa_zip_codes_geo_100m.json`

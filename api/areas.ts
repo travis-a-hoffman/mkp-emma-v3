@@ -10,7 +10,7 @@ const AreaSchema = z.object({
   description: z.string().optional().nullable(),
   steward_id: z.string().uuid().optional().nullable(),
   finance_coordinator_id: z.string().uuid().optional().nullable(),
-  geo_polygon: z.any().optional().nullable(),
+  geo_json: z.any().optional().nullable(),
   color: z.string().optional().nullable(),
   is_active: z.boolean().default(true),
 })
@@ -114,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             description: validatedData.description || null,
             steward_id: validatedData.steward_id || null,
             finance_coordinator_id: validatedData.finance_coordinator_id || null,
-            geo_polygon: validatedData.geo_polygon || null,
+            geo_json: validatedData.geo_json || null,
             color: validatedData.color || null,
             is_active: validatedData.is_active,
           })

@@ -24,7 +24,7 @@ interface ImportedCommunity {
   coordinator_id: string | null
 
   // JSON fields
-  geo_polygon: any | null
+  geo_json: any | null
 
   // Timestamps
   created_at: string
@@ -164,11 +164,11 @@ async function main() {
       }
     }
 
-    // Check if community already exists
+    // Check if community already exists (by id since code may be null)
     const { data: existingCommunity } = await supabase
       .from("communities")
-      .select("id, code")
-      .eq("code", community.code)
+      .select("id, name")
+      .eq("id", community.id)
       .single()
 
     if (existingCommunity && !force) {
@@ -183,17 +183,18 @@ async function main() {
         .from("communities")
         .update({
           name: community.name,
+          code: community.code,
           description: community.description,
           image_url: community.image_url,
           color: community.color,
           is_active: community.is_active,
           area_id: community.area_id,
           coordinator_id: community.coordinator_id,
-          geo_polygon: community.geo_polygon,
+          geo_json: community.geo_json,
           deleted_at: community.deleted_at,
           updated_at: new Date().toISOString(),
         })
-        .eq("code", community.code)
+        .eq("id", community.id)
 
       if (updateError) {
         console.error(`  ✗ Error updating ${filename}: ${updateError.message}`)
@@ -215,7 +216,7 @@ async function main() {
         is_active: community.is_active,
         area_id: community.area_id,
         coordinator_id: community.coordinator_id,
-        geo_polygon: community.geo_polygon,
+        geo_json: community.geo_json,
         created_at: community.created_at,
         updated_at: community.updated_at,
         deleted_at: community.deleted_at,

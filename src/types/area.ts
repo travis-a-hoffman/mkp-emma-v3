@@ -5,7 +5,8 @@ export interface Area {
   description?: string | null
   steward_id?: string | null
   finance_coordinator_id?: string | null
-  geo_polygon?: any
+  geo_json?: any
+  geo_definition?: any
   image_url?: string | null
   color?: string
   is_active: boolean

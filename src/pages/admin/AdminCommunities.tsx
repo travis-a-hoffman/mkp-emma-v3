@@ -161,7 +161,7 @@ export default function AdminCommunities() {
       description: null,
       area_id: null,
       coordinator_id: null,
-      geo_polygon: null,
+      geo_json: null,
       image_url: null,
       is_active: true,
       created_at: new Date().toISOString(),
@@ -189,7 +189,7 @@ export default function AdminCommunities() {
       const url = isNewCommunity ? "/api/communities" : `/api/communities/${id}`
       const method = isNewCommunity ? "POST" : "PUT"
 
-      console.log("[v0] Saving community with geo_polygon:", formData.geo_polygon)
+      console.log("[v0] Saving community with geo_json:", formData.geo_json)
 
       const response = await fetch(url, {
         method,
@@ -205,7 +205,7 @@ export default function AdminCommunities() {
       const result = await response.json()
       const savedCommunity = result.data
 
-      console.log("[v0] Received saved community with geo_polygon:", savedCommunity.geo_polygon)
+      console.log("[v0] Received saved community with geo_json:", savedCommunity.geo_json)
 
       setCommunities((prev) => {
         const updatedCommunities = isNewCommunity
@@ -213,8 +213,8 @@ export default function AdminCommunities() {
           : prev.map((c) => (c.id === id ? savedCommunity : c))
 
         console.log(
-          "[v0] Updated communities state, communities with geo_polygon:",
-          updatedCommunities.filter((c) => c.geo_polygon).length,
+          "[v0] Updated communities state, communities with geo_json:",
+          updatedCommunities.filter((c) => c.geo_json).length,
         )
 
         return updatedCommunities
@@ -248,7 +248,7 @@ export default function AdminCommunities() {
 
   // Helper function to create FeatureCollection from multiple polygons
   const createOverviewMapData = () => {
-    const communitiesWithGeo = communities.filter((c) => c.geo_polygon)
+    const communitiesWithGeo = communities.filter((c) => c.geo_json)
 
     console.log("[v0] Creating overview map data for", communitiesWithGeo.length, "communities")
 
@@ -257,10 +257,10 @@ export default function AdminCommunities() {
     communitiesWithGeo.forEach((community, index) => {
       console.log(`[v0] Community ${index + 1} (${community.name}):`, {
         id: community.id,
-        geo_polygon_type: typeof community.geo_polygon,
-        geo_polygon_structure: community.geo_polygon,
-        has_type: community.geo_polygon?.type,
-        has_coordinates: community.geo_polygon?.coordinates ? "yes" : "no",
+        geo_json_type: typeof community.geo_json,
+        geo_json_structure: community.geo_json,
+        has_type: community.geo_json?.type,
+        has_coordinates: community.geo_json?.coordinates ? "yes" : "no",
       })
     })
 
@@ -269,16 +269,16 @@ export default function AdminCommunities() {
       .map((community) => {
         let geometry = null
 
-        // Extract the actual Polygon geometry from the community's geo_polygon
-        if (community.geo_polygon?.type === "FeatureCollection" && community.geo_polygon.features?.length > 0) {
+        // Extract the actual Polygon geometry from the community's geo_json
+        if (community.geo_json?.type === "FeatureCollection" && community.geo_json.features?.length > 0) {
           // If it's a FeatureCollection, get the geometry from the first feature
-          geometry = community.geo_polygon.features[0].geometry
-        } else if (community.geo_polygon?.type === "Polygon") {
+          geometry = community.geo_json.features[0].geometry
+        } else if (community.geo_json?.type === "Polygon") {
           // If it's already a Polygon, use it directly
-          geometry = community.geo_polygon
-        } else if (community.geo_polygon?.type === "Feature") {
+          geometry = community.geo_json
+        } else if (community.geo_json?.type === "Feature") {
           // If it's a Feature, get its geometry
-          geometry = community.geo_polygon.geometry
+          geometry = community.geo_json.geometry
         }
 
         const feature = {
@@ -394,18 +394,18 @@ export default function AdminCommunities() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {filteredCommunities.some((c) => c.geo_polygon) && (
+                  {filteredCommunities.some((c) => c.geo_json) && (
                     <div className="border rounded-lg overflow-hidden bg-gray-50">
                       <div className="p-3 bg-white border-b">
                         <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
                           <MapPin className="w-4 h-4" />
-                          Communities Overview Map ({filteredCommunities.filter((c) => c.geo_polygon).length}{" "}
+                          Communities Overview Map ({filteredCommunities.filter((c) => c.geo_json).length}{" "}
                           communities)
                         </h4>
                       </div>
                       <GoogleMap
                         key={`overview-${filteredCommunities
-                          .filter((c) => c.geo_polygon)
+                          .filter((c) => c.geo_json)
                           .map((c) => c.id)
                           .join("-")}`}
                         geoPolygon={createOverviewMapData()}
@@ -624,7 +624,7 @@ export default function AdminCommunities() {
                                           </label>
                                           <Textarea
                                             value={
-                                              formData.geo_polygon ? JSON.stringify(formData.geo_polygon, null, 2) : ""
+                                              formData.geo_json ? JSON.stringify(formData.geo_json, null, 2) : ""
                                             }
                                             onChange={(e) => {
                                               let geoValue: any | null = null
@@ -640,7 +640,7 @@ export default function AdminCommunities() {
                                                 ...prev,
                                                 [community.id]: {
                                                   ...prev[community.id],
-                                                  geo_polygon: geoValue,
+                                                  geo_json: geoValue,
                                                 },
                                               }))
                                             }}
@@ -775,14 +775,14 @@ export default function AdminCommunities() {
                                       </div>
                                     </div>
 
-                                    {community.geo_polygon && (
+                                    {community.geo_json && (
                                       <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-2">
                                           Geographic Area
                                         </label>
                                         <div className="border rounded-lg overflow-hidden">
                                           <GoogleMap
-                                            geoPolygon={community.geo_polygon}
+                                            geoPolygon={community.geo_json}
                                             className="w-full aspect-video"
                                           />
                                         </div>

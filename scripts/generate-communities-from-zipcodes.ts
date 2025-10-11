@@ -1,5 +1,7 @@
 #!/usr/bin/env tsx
 
+import { dissolve } from "@turf/dissolve"
+import { flatten } from "@turf/flatten"
 import { union } from "@turf/union"
 import { featureCollection } from "@turf/helpers"
 import * as fs from "node:fs/promises"
@@ -19,7 +21,7 @@ interface ZipcodeData {
   community: string | null
   latitude: number | null
   longitude: number | null
-  geo_polygon?: any
+  geo_json?: any
 }
 
 interface GeneratedArea {
@@ -44,7 +46,7 @@ interface ExportedCommunity {
   coordinator_id: string | null
 
   // JSON fields
-  geo_polygon: any | null
+  geo_json: any | null
 
   // Timestamps
   created_at: string
@@ -230,78 +232,102 @@ async function main() {
       console.warn(`  ⚠ Warning: Area '${areaName}' not found in generated areas`)
     }
 
-    // Create geo_polygon by unioning all zipcode polygons
+    // Create geo_json by dissolving all zipcode polygons into a boundary
     let geoPolygon: any = null
 
-    const zipcodesWithGeometry = zipcodes.filter((z) => z.geo_polygon)
+    const zipcodesWithGeometry = zipcodes.filter((z) => z.geo_json)
 
     if (zipcodesWithGeometry.length > 0) {
       try {
-        console.log(`  Merging ${zipcodesWithGeometry.length} polygons...`)
+        console.log(`  Processing ${zipcodesWithGeometry.length} zipcodes...`)
 
-        // Start with the first polygon
-        let result = zipcodesWithGeometry[0].geo_polygon
-
-        // Union with each subsequent polygon
-        for (let i = 1; i < zipcodesWithGeometry.length; i++) {
-          const nextGeometry = zipcodesWithGeometry[i].geo_polygon
-
-          try {
-            // Create features for union
-            const feature1 = {
+        // Stage 1: Union each zipcode's MultiPolygon into a single geometry
+        console.log(`  Stage 1: Unifying individual zipcodes...`)
+        const unifiedZipcodes = zipcodesWithGeometry.map((z, idx) => {
+          if (z.geo_json.type === "MultiPolygon") {
+            // Flatten MultiPolygon into individual Polygons
+            const flattened = flatten({
               type: "Feature" as const,
-              geometry: result,
+              geometry: z.geo_json,
               properties: {},
-            }
-            const feature2 = {
-              type: "Feature" as const,
-              geometry: nextGeometry,
-              properties: {},
-            }
+            })
 
-            const fc = featureCollection([feature1, feature2])
-            const unionResult = union(fc)
-
-            if (unionResult) {
-              result = unionResult.geometry
+            // Union all polygons within this zipcode together
+            let result = flattened.features[0].geometry
+            for (let i = 1; i < flattened.features.length; i++) {
+              try {
+                const fc = featureCollection([
+                  { type: "Feature" as const, geometry: result, properties: {} },
+                  { type: "Feature" as const, geometry: flattened.features[i].geometry, properties: {} },
+                ])
+                const unioned = union(fc)
+                if (unioned) {
+                  result = unioned.geometry
+                }
+              } catch (unionError: any) {
+                console.warn(`    ⚠ Warning: Failed to union polygon ${i} in zipcode ${idx}: ${unionError.message}`)
+              }
             }
-          } catch (unionError: any) {
-            console.warn(`  ⚠ Warning: Failed to union polygon ${i}: ${unionError.message}`)
-            // Continue with current result
+            return result
           }
-        }
+          return z.geo_json
+        })
 
-        geoPolygon = wrapInFeatureCollection(result)
-        console.log(`  ✓ Successfully created merged polygon`)
+        console.log(`  Stage 2: Dissolving ${unifiedZipcodes.length} unified zipcodes into community boundary...`)
+
+        // Stage 2: Dissolve all unified zipcode geometries together
+        const features = unifiedZipcodes.map((geom) => ({
+          type: "Feature" as const,
+          geometry: geom,
+          properties: { community: communityName },
+        }))
+
+        const fc = featureCollection(features)
+        const dissolved = dissolve(fc, { propertyName: "community" })
+
+        if (dissolved && dissolved.features.length > 0) {
+          // Dissolve returns a FeatureCollection, extract the first feature's geometry
+          const mergedGeometry = dissolved.features[0].geometry
+          geoPolygon = wrapInFeatureCollection(mergedGeometry)
+
+          // Report polygon count
+          const polyCount =
+            mergedGeometry.type === "MultiPolygon" ? mergedGeometry.coordinates.length : 1
+          console.log(`  ✓ Created boundary with ${polyCount} polygon(s)`)
+        } else {
+          console.warn(`  ⚠ Warning: Dissolve returned no features`)
+          geoPolygon = null
+        }
       } catch (error: any) {
-        console.error(`  ✗ Error creating polygon union: ${error.message}`)
+        console.error(`  ✗ Error dissolving polygons: ${error.message}`)
         geoPolygon = null
       }
     } else {
-      console.warn(`  ⚠ No zipcodes with geo_polygon data`)
+      console.warn(`  ⚠ No zipcodes with geo_json data`)
     }
 
     // Generate the Community object
     const now = new Date().toISOString()
-    const communityCode = sanitizeCode(communityName)
 
     const communityData: ExportedCommunity = {
       id: randomUUID(),
       name: communityName,
-      code: communityCode,
+      code: null,
       description: null,
       image_url: null,
       color: null,
       is_active: true,
       area_id: areaId,
       coordinator_id: null,
-      geo_polygon: geoPolygon,
+      geo_json: geoPolygon,
       created_at: now,
       updated_at: now,
       deleted_at: null,
     }
 
-    const filename = `${communityCode}.json`
+    // Use sanitized name for filename only (not for code field)
+    const sanitizedFilename = sanitizeCode(communityName)
+    const filename = `${sanitizedFilename}.json`
     const filepath = path.join(outputDir, filename)
 
     if (dryRun) {
