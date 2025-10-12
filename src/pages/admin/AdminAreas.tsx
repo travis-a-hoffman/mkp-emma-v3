@@ -87,19 +87,28 @@ export default function AdminAreas() {
 
     const features = areasWithGeo
       .map((area) => {
-        console.log("[v0] Processing area:", area.name, "geo_json type:", typeof area.geo_json)
+        console.log("[v0] Processing area:", area.name, "geo_json type:", area.geo_json.type)
 
         let geometry
         if (area.geo_json.type === "FeatureCollection") {
           // Extract the first feature's geometry from the FeatureCollection
           geometry = area.geo_json.features?.[0]?.geometry
-          console.log("[v0] Extracted geometry from FeatureCollection for area:", area.name)
+          console.log("[v0] Extracted geometry from FeatureCollection for area:", area.name, "geometry type:", geometry?.type)
         } else if (area.geo_json.type === "Polygon") {
           // Use the polygon directly
           geometry = area.geo_json
           console.log("[v0] Using direct Polygon for area:", area.name)
+        } else if (area.geo_json.type === "MultiPolygon") {
+          // Use the MultiPolygon directly
+          geometry = area.geo_json
+          console.log("[v0] Using MultiPolygon for area:", area.name)
         } else {
           console.warn("[v0] Unknown geo_json type for area:", area.name, area.geo_json.type)
+          return null
+        }
+
+        if (!geometry) {
+          console.warn("[v0] No geometry found for area:", area.name)
           return null
         }
 

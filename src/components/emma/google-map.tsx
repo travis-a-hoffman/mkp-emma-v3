@@ -92,6 +92,30 @@ export function GoogleMap({ geoPolygon, className = "w-full aspect-video" }: Goo
         polygonCoords.forEach((coord: { lat: number; lng: number }) => {
           bounds.extend(coord)
         })
+      } else if (geoPolygon.type === "MultiPolygon") {
+        // Handle MultiPolygon - iterate through each polygon
+        geoPolygon.coordinates.forEach((polygonCoordinates: any) => {
+          const coordinates = polygonCoordinates[0] // First ring of each polygon
+          const polygonCoords = coordinates.map((coord: [number, number]) => ({
+            lat: coord[1],
+            lng: coord[0],
+          }))
+
+          const polygon = new window.google.maps.Polygon({
+            paths: polygonCoords,
+            strokeColor: "#FF0000",
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: "#FF0000",
+            fillOpacity: 0.35,
+          })
+
+          polygon.setMap(map)
+
+          polygonCoords.forEach((coord: { lat: number; lng: number }) => {
+            bounds.extend(coord)
+          })
+        })
       } else if (geoPolygon.type === "FeatureCollection") {
         // Handle FeatureCollection
         geoPolygon.features.forEach((feature: any) => {
@@ -115,6 +139,30 @@ export function GoogleMap({ geoPolygon, className = "w-full aspect-video" }: Goo
 
             polygonCoords.forEach((coord: { lat: number; lng: number }) => {
               bounds.extend(coord)
+            })
+          } else if (feature.geometry.type === "MultiPolygon") {
+            // Handle MultiPolygon within FeatureCollection
+            feature.geometry.coordinates.forEach((polygonCoordinates: any) => {
+              const coordinates = polygonCoordinates[0] // First ring of each polygon
+              const polygonCoords = coordinates.map((coord: [number, number]) => ({
+                lat: coord[1],
+                lng: coord[0],
+              }))
+
+              const polygon = new window.google.maps.Polygon({
+                paths: polygonCoords,
+                strokeColor: "#FF0000",
+                strokeOpacity: 0.8,
+                strokeWeight: 2,
+                fillColor: "#FF0000",
+                fillOpacity: 0.35,
+              })
+
+              polygon.setMap(map)
+
+              polygonCoords.forEach((coord: { lat: number; lng: number }) => {
+                bounds.extend(coord)
+              })
             })
           }
         })

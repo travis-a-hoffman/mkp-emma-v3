@@ -3,6 +3,7 @@
 import { dissolve } from "@turf/dissolve"
 import { flatten } from "@turf/flatten"
 import { union } from "@turf/union"
+import { difference } from "@turf/difference"
 import { featureCollection } from "@turf/helpers"
 import * as fs from "node:fs/promises"
 import * as fsSync from "node:fs"
@@ -50,6 +51,7 @@ interface CountyFeature {
     STATE: string
     COUNTY: string
     NAME: string
+    LSAD: string
   }
   geometry: any
 }
@@ -255,11 +257,16 @@ async function main() {
   })
 
   // Build county lookup using state abbreviations
-  const countiesByName = new Map<string, CountyFeature>()
+  // Use array to store multiple counties with same name but different LSAD (e.g., "St. Louis" has County and city)
+  const countiesByName = new Map<string, CountyFeature[]>()
   countiesData.features.forEach((f: CountyFeature) => {
     const stateAbbrev = stateCodeToAbbrev.get(f.properties.STATE) || f.properties.STATE
     const key = `${f.properties.NAME}, ${stateAbbrev}`.toLowerCase()
-    countiesByName.set(key, f)
+
+    if (!countiesByName.has(key)) {
+      countiesByName.set(key, [])
+    }
+    countiesByName.get(key)!.push(f)
   })
 
   const zipcodesByCode = new Map<string, ZipcodeFeature>()
@@ -341,20 +348,55 @@ async function main() {
     // Process counties
     for (const countyEntry of geoDef.counties) {
       const op = countyEntry[0]
-      const countyName = countyEntry.slice(1).trim().toLowerCase()
+      const countyInput = countyEntry.slice(1).trim()
 
-      const countyFeature = countiesByName.get(countyName)
-      if (!countyFeature) {
+      // Parse optional LSAD qualifier: "Name (LSAD), ST" or "Name, ST"
+      const lsadMatch = countyInput.match(/^(.+?)\s*\(([^)]+)\)\s*,\s*(.+)$/)
+      let countyName: string
+      let lsadQualifier: string | null = null
+
+      if (lsadMatch) {
+        // Format: "Name (LSAD), ST"
+        countyName = `${lsadMatch[1].trim()}, ${lsadMatch[3].trim()}`
+        lsadQualifier = lsadMatch[2].trim()
+      } else {
+        // Format: "Name, ST"
+        countyName = countyInput
+      }
+
+      const matchingCounties = countiesByName.get(countyName.toLowerCase())
+      if (!matchingCounties || matchingCounties.length === 0) {
         console.warn(`  ⚠ Warning: County not found: ${countyName}`)
         continue
       }
 
+      // If LSAD qualifier provided, filter by it
+      let countyFeature: CountyFeature | null = null
+      if (lsadQualifier) {
+        const filtered = matchingCounties.filter(
+          (c) => c.properties.LSAD.toLowerCase() === lsadQualifier.toLowerCase()
+        )
+        if (filtered.length === 0) {
+          console.warn(`  ⚠ Warning: County "${countyName}" with LSAD "${lsadQualifier}" not found`)
+          console.warn(`  Available LSAD values: ${matchingCounties.map((c) => c.properties.LSAD).join(", ")}`)
+          continue
+        }
+        countyFeature = filtered[0]
+      } else {
+        // No LSAD qualifier - use first match (should only be one if properly defined)
+        if (matchingCounties.length > 1) {
+          console.warn(`  ⚠ Warning: Multiple entries for "${countyName}", using ${matchingCounties[0].properties.LSAD}`)
+          console.warn(`  Available: ${matchingCounties.map((c) => c.properties.LSAD).join(", ")}`)
+        }
+        countyFeature = matchingCounties[0]
+      }
+
       if (op === "+") {
         geometriesToInclude.push(countyFeature.geometry)
-        console.log(`  + Added county: ${countyEntry.slice(1).trim()}`)
+        console.log(`  + Added county: ${countyInput}`)
       } else if (op === "-") {
         geometriesToExclude.push(countyFeature.geometry)
-        console.log(`  - Excluded county: ${countyEntry.slice(1).trim()}`)
+        console.log(`  - Excluded county: ${countyInput}`)
       }
     }
 
@@ -446,12 +488,124 @@ async function main() {
       console.log(`  Stage 2: Dissolving ${flattenedFeatures.length} polygons into area boundary...`)
 
       // Stage 2: Dissolve all polygon features together
+      // Note: Don't use propertyName - we want to dissolve ALL features together
+      // Without propertyName, dissolve returns a MultiPolygon for disjoint regions (e.g., Hawaii islands)
       const fc = featureCollection(flattenedFeatures)
-      const dissolved = dissolve(fc, { propertyName: "area" })
+      const dissolved = dissolve(fc)
 
       if (dissolved && dissolved.features.length > 0) {
-        // Dissolve returns a FeatureCollection, extract the first feature's geometry
-        const mergedGeometry = dissolved.features[0].geometry
+        // Dissolve without propertyName returns a flattened FeatureCollection
+        // For disjoint regions (Hawaii islands, Michigan peninsulas), it returns MULTIPLE Polygon features
+        // We need to combine them into a single MultiPolygon
+        let mergedGeometry: any
+
+        if (dissolved.features.length === 1) {
+          // Single connected polygon or already a MultiPolygon
+          mergedGeometry = dissolved.features[0].geometry
+        } else {
+          // Multiple disjoint polygons - combine into MultiPolygon
+          console.log(`  ⚠ Note: Result contains ${dissolved.features.length} disjoint polygon(s)`)
+
+          const allCoordinates: any[] = []
+          for (const feature of dissolved.features) {
+            if (feature.geometry.type === "Polygon") {
+              // Add Polygon coordinates as a single array
+              allCoordinates.push(feature.geometry.coordinates)
+            } else if (feature.geometry.type === "MultiPolygon") {
+              // Add all MultiPolygon coordinates
+              allCoordinates.push(...feature.geometry.coordinates)
+            }
+          }
+
+          mergedGeometry = {
+            type: "MultiPolygon",
+            coordinates: allCoordinates,
+          }
+        }
+
+        // Stage 3: Subtract excluded geometries (if any)
+        if (geometriesToExclude.length > 0) {
+          console.log(`\n  Stage 3: Subtracting ${geometriesToExclude.length} excluded geometries...`)
+
+          // Process excluded geometries the same way as included
+          const unifiedExcludedGeometries = geometriesToExclude.map((geom, idx) => {
+            if (geom.type === "MultiPolygon") {
+              const flattened = flatten({
+                type: "Feature" as const,
+                geometry: geom,
+                properties: {},
+              })
+              let result = flattened.features[0].geometry
+              for (let i = 1; i < flattened.features.length; i++) {
+                try {
+                  const fc = featureCollection([
+                    { type: "Feature" as const, geometry: result, properties: {} },
+                    { type: "Feature" as const, geometry: flattened.features[i].geometry, properties: {} },
+                  ])
+                  const unioned = union(fc)
+                  if (unioned) {
+                    result = unioned.geometry
+                  }
+                } catch (unionError: any) {
+                  console.warn(`    ⚠ Warning: Failed to union excluded polygon ${i} in geometry ${idx}: ${unionError.message}`)
+                }
+              }
+              return result
+            }
+            return geom
+          })
+
+          // Flatten excluded geometries
+          const flattenedExcludedFeatures: any[] = []
+          for (const geom of unifiedExcludedGeometries) {
+            if (geom.type === "MultiPolygon") {
+              const flattened = flatten({
+                type: "Feature" as const,
+                geometry: geom,
+                properties: { excluded: true },
+              })
+              flattenedExcludedFeatures.push(...flattened.features)
+            } else {
+              flattenedExcludedFeatures.push({
+                type: "Feature" as const,
+                geometry: geom,
+                properties: { excluded: true },
+              })
+            }
+          }
+
+          // Dissolve all excluded geometries together
+          // Note: Don't use propertyName - we want to dissolve ALL excluded features together
+          const excludedFc = featureCollection(flattenedExcludedFeatures)
+          const dissolvedExcluded = dissolve(excludedFc)
+
+          if (dissolvedExcluded && dissolvedExcluded.features.length > 0) {
+            // Subtract each excluded feature from the result
+            for (const excludedFeature of dissolvedExcluded.features) {
+              try {
+                const includedFeature = {
+                  type: "Feature" as const,
+                  geometry: mergedGeometry,
+                  properties: {},
+                }
+
+                // @turf/difference expects a FeatureCollection with [included, excluded] features
+                const diffFc = featureCollection([includedFeature, excludedFeature])
+                const diffResult = difference(diffFc)
+
+                if (diffResult) {
+                  mergedGeometry = diffResult.geometry
+                  console.log(`    ✓ Subtracted excluded geometry`)
+                } else {
+                  console.warn(`    ⚠ Warning: Difference returned null (excluded area may not overlap)`)
+                }
+              } catch (diffError: any) {
+                console.warn(`    ⚠ Warning: Failed to subtract excluded geometry: ${diffError.message}`)
+              }
+            }
+          }
+        }
+
         geoJson = wrapInFeatureCollection(mergedGeometry)
 
         // Report polygon count

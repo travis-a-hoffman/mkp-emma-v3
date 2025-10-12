@@ -44,6 +44,7 @@ interface CountyFeature {
     STATE: string
     COUNTY: string
     NAME: string
+    LSAD: string
   }
 }
 
@@ -241,11 +242,16 @@ async function main() {
   })
 
   // Build county lookup using state abbreviations
-  const countiesByName = new Map<string, CountyFeature>()
+  // Use array to store multiple counties with same name but different LSAD (e.g., "St. Louis" has County and city)
+  const countiesByName = new Map<string, CountyFeature[]>()
   countiesData.features.forEach((f: CountyFeature) => {
     const stateAbbrev = stateCodeToAbbrev.get(f.properties.STATE) || f.properties.STATE
     const key = `${f.properties.NAME}, ${stateAbbrev}`.toLowerCase()
-    countiesByName.set(key, f)
+
+    if (!countiesByName.has(key)) {
+      countiesByName.set(key, [])
+    }
+    countiesByName.get(key)!.push(f)
   })
 
   const zipcodesByCode = new Map<string, ZipcodeFeature>()
@@ -352,6 +358,7 @@ async function main() {
     // Counties
     console.log("\n--- COUNTIES ---")
     console.log('Enter counties as "County Name, ST" with "+" to add or "-" to subtract')
+    console.log('Optional: Include LSAD qualifier like "County Name (County), ST" or "County Name (city), ST"')
     console.log('Type "done" when finished, "clear" to reset')
     console.log(`Current: ${definition.counties.join(", ") || "(none)"}`)
 
@@ -371,15 +378,69 @@ async function main() {
       }
 
       const op = input[0]
-      const countyName = input.slice(1).trim()
+      const countyInput = input.slice(1).trim()
 
-      if (!countiesByName.has(countyName.toLowerCase())) {
+      // Parse optional LSAD qualifier: "Name (LSAD), ST" or "Name, ST"
+      const lsadMatch = countyInput.match(/^(.+?)\s*\(([^)]+)\)\s*,\s*(.+)$/)
+      let countyName: string
+      let lsadQualifier: string | null = null
+
+      if (lsadMatch) {
+        // Format: "Name (LSAD), ST"
+        countyName = `${lsadMatch[1].trim()}, ${lsadMatch[3].trim()}`
+        lsadQualifier = lsadMatch[2].trim()
+      } else {
+        // Format: "Name, ST"
+        countyName = countyInput
+      }
+
+      const countyKey = countyName.toLowerCase()
+      const matchingCounties = countiesByName.get(countyKey)
+
+      if (!matchingCounties || matchingCounties.length === 0) {
         console.log(`  ✗ Invalid county: ${countyName}`)
         console.log(`  Format: "County Name, ST" (e.g., "El Paso, TX")`)
         continue
       }
 
-      const entry = `${op}${countyName}`
+      // If LSAD qualifier provided, filter by it
+      let selectedCounty: CountyFeature | null = null
+      if (lsadQualifier) {
+        const filtered = matchingCounties.filter(
+          (c) => c.properties.LSAD.toLowerCase() === lsadQualifier.toLowerCase()
+        )
+        if (filtered.length === 0) {
+          console.log(`  ✗ No county found with LSAD "${lsadQualifier}"`)
+          console.log(`  Available options for "${countyName}":`)
+          matchingCounties.forEach((c) => {
+            console.log(`    - ${c.properties.NAME} (${c.properties.LSAD})`)
+          })
+          continue
+        }
+        selectedCounty = filtered[0]
+      } else {
+        // No LSAD qualifier provided
+        if (matchingCounties.length > 1) {
+          console.log(`  ⚠ Multiple entries found for "${countyName}":`)
+          matchingCounties.forEach((c) => {
+            console.log(`    - ${c.properties.NAME} (${c.properties.LSAD})`)
+          })
+          console.log(`  Please specify LSAD, e.g., "${op}${countyName.split(",")[0]} (County), ${countyName.split(",")[1]}"`)
+          continue
+        }
+        selectedCounty = matchingCounties[0]
+      }
+
+      // Build the entry string with LSAD if not provided by user
+      let entry: string
+      if (lsadQualifier) {
+        entry = `${op}${countyInput}`
+      } else {
+        // Add LSAD to entry for clarity
+        const nameParts = countyName.split(",")
+        entry = `${op}${nameParts[0].trim()} (${selectedCounty.properties.LSAD}), ${nameParts[1].trim()}`
+      }
+
       definition.counties.push(entry)
       console.log(`  ✓ Added: ${entry}`)
     }

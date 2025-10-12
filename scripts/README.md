@@ -443,6 +443,12 @@ MKP Connect (MariaDB)
    - Downloads GeoJSON data for states, counties, and zipcodes if missing
    - Validates: User input against GeoJSON data
    - Supports: Add (+) and subtract (-) operators (e.g., `+Colorado`, `-Montezuma, CO`, `+79901`)
+   - **LSAD Qualifiers**: Optional LSAD (Legal/Statistical Area Description) qualifier for counties
+     - Format: `+County Name (LSAD), ST` or `-County Name (LSAD), ST`
+     - Example: `+St. Louis (County), MO` or `+St. Louis (city), MO`
+     - Required when multiple entries exist with same name (e.g., St. Louis County vs St. Louis city)
+     - Script prompts with available options if LSAD needed but not provided
+     - Common LSAD values: County, city, Parish, Borough, CA (Census Area)
    - Updates: Area JSON files with `geo_definition` field
    - **Use case**: After assigning codes, to manually define/refine area boundaries
    - **Format**:
@@ -450,7 +456,7 @@ MKP Connect (MariaDB)
      {
        "geo_definition": {
          "states": ["+Colorado"],
-         "counties": ["-Montezuma, CO", "-La Plata, CO"],
+         "counties": ["-Montezuma (County), CO", "-La Plata (County), CO"],
          "zipcodes": ["+79901", "+79902"]
        }
      }
@@ -460,6 +466,11 @@ MKP Connect (MariaDB)
     - Generates `geo_json` field from `geo_definition` in Area JSON files
     - Reads: Area JSON files with `geo_definition`
     - Processes: States, counties, and zipcodes with +/- operators
+    - **LSAD Support**: Parses optional LSAD qualifiers for counties
+      - Recognizes format: `+County Name (LSAD), ST`
+      - Filters county data by LSAD when qualifier provided
+      - Warns if LSAD not found and lists available options
+      - Defaults to first match if multiple entries exist without qualifier
     - Merges: Uses two-stage `@turf/dissolve` algorithm to create clean boundaries
       - Stage 1: Flatten and union each MultiPolygon into single geometry
       - Stage 1.5: Flatten any remaining MultiPolygons into Polygons
@@ -662,11 +673,12 @@ State: done
 
 --- COUNTIES ---
 Enter counties as "County Name, ST" with "+" to add or "-" to subtract
+Optional: Include LSAD qualifier like "County Name (County), ST" or "County Name (city), ST"
 Type "done" when finished, "clear" to reset
-County: -Montezuma, CO
-  ✓ Added: -Montezuma, CO
-County: -La Plata, CO
-  ✓ Added: -La Plata, CO
+County: -Montezuma (County), CO
+  ✓ Added: -Montezuma (County), CO
+County: -La Plata (County), CO
+  ✓ Added: -La Plata (County), CO
 County: done
 
 --- ZIPCODES ---
@@ -685,7 +697,7 @@ Zipcode: done
 {
   "geo_definition": {
     "states": ["+Colorado"],
-    "counties": ["-Montezuma, CO", "-La Plata, CO"],
+    "counties": ["-Montezuma (County), CO", "-La Plata (County), CO"],
     "zipcodes": []
   }
 }
@@ -708,6 +720,7 @@ pnpm generate:areas-geojson --dry-run --host mkp-emma-v3.vercel.app
 - Reads area JSON files with `geo_definition`
 - Downloads GeoJSON data for states, counties, and zipcodes (if missing)
 - Collects geometries based on +/- operators
+- Parses optional LSAD qualifiers for counties (e.g., `(County)`, `(city)`)
 - Merges geometries using three-stage dissolve algorithm:
   1. **Stage 1**: Flatten and union each MultiPolygon into single geometry
   2. **Stage 1.5**: Flatten any remaining MultiPolygons into Polygons
@@ -720,8 +733,8 @@ pnpm generate:areas-geojson --dry-run --host mkp-emma-v3.vercel.app
 Area: Colorado (COLO)
 ============================================================
   + Added state: Colorado
-  - Excluded county: Montezuma, CO
-  - Excluded county: La Plata, CO
+  - Excluded county: Montezuma (County), CO
+  - Excluded county: La Plata (County), CO
 
   Processing 1 geometries...
   Stage 1: Unifying individual geometries...
