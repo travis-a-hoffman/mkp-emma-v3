@@ -53,7 +53,7 @@ export default function AdminAreas() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const [editingItems, setEditingItems] = useState<Set<string>>(new Set())
   const [editFormData, setEditFormData] = useState<Record<string, Partial<Area>>>({})
   const [editAdmins, setEditAdmins] = useState<Record<string, Area["admins"]>>({})
@@ -136,19 +136,13 @@ export default function AdminAreas() {
   const nationalOverviewMapData = createNationalOverviewMapData()
 
   const toggleExpanded = (id: string) => {
-    setExpandedItems((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(id)) {
-        newSet.delete(id)
-      } else {
-        newSet.add(id)
-      }
-      return newSet
-    })
+    const newExpandedId = id === expandedItem ? null : id
+    setExpandedItem(newExpandedId)
+    return newExpandedId
   }
 
   const startEditing = (area: Area) => {
-    setExpandedItems((prev) => new Set(prev).add(area.id))
+    setExpandedItem(area.id)
     setEditingItems((prev) => new Set(prev).add(area.id))
     setEditFormData((prev) => ({
       ...prev,
@@ -187,7 +181,7 @@ export default function AdminAreas() {
 
     setCreatingArea(newArea)
     setEditingItems((prev) => new Set(prev).add(tempId))
-    setExpandedItems((prev) => new Set(prev).add(tempId))
+    setExpandedItem(tempId)
     setEditFormData((prev) => ({
       ...prev,
       [tempId]: {
@@ -223,14 +217,10 @@ export default function AdminAreas() {
       delete newData[id]
       return newData
     })
+    setExpandedItem(null)
 
     if (creatingArea && creatingArea.id === id) {
       setCreatingArea(null)
-      setExpandedItems((prev) => {
-        const newSet = new Set(prev)
-        newSet.delete(id)
-        return newSet
-      })
     }
   }
 
@@ -331,12 +321,7 @@ export default function AdminAreas() {
 
         setAreas((prev) => [completeArea, ...prev])
         setCreatingArea(null)
-        setExpandedItems((prev) => {
-          const newSet = new Set(prev)
-          newSet.delete(id)
-          newSet.add(savedArea.id)
-          return newSet
-        })
+        setExpandedItem(savedArea.id)
       } else {
         setAreas((prev) => prev.map((a) => (a.id === id ? completeArea : a)))
       }
@@ -808,7 +793,7 @@ export default function AdminAreas() {
               ) : (
                 <div className="space-y-4">
                   {displayedAreas.map((area) => {
-                    const isExpanded = expandedItems.has(area.id)
+                    const isExpanded = expandedItem === area.id
                     const isEditing = editingItems.has(area.id)
                     const isSaving = savingItems.has(area.id)
                     const isArchiving = archivingItems.has(area.id)

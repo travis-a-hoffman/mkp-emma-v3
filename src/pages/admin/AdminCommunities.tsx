@@ -35,7 +35,7 @@ export default function AdminCommunities() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const [editingItems, setEditingItems] = useState<Set<string>>(new Set())
   const [editFormData, setEditFormData] = useState<Record<string, Partial<Community>>>({})
   const [savingItems, setSavingItems] = useState<Set<string>>(new Set())
@@ -114,24 +114,23 @@ export default function AdminCommunities() {
   }
 
   const toggleExpanded = (id: string) => {
-    setExpandedItems((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(id)) {
-        newSet.delete(id)
-        setEditingItems((prevEdit) => {
-          const newEditSet = new Set(prevEdit)
-          newEditSet.delete(id)
-          return newEditSet
-        })
-      } else {
-        newSet.add(id)
-      }
-      return newSet
-    })
+    const newExpandedId = id === expandedItem ? null : id
+    setExpandedItem(newExpandedId)
+
+    // Close editing mode when collapsing
+    if (!newExpandedId) {
+      setEditingItems((prevEdit) => {
+        const newEditSet = new Set(prevEdit)
+        newEditSet.delete(id)
+        return newEditSet
+      })
+    }
+
+    return newExpandedId
   }
 
   const startEditing = (community: Community) => {
-    setExpandedItems((prev) => new Set(prev).add(community.id))
+    setExpandedItem(community.id)
     setEditingItems((prev) => new Set(prev).add(community.id))
     setEditFormData((prev) => ({
       ...prev,
@@ -150,6 +149,7 @@ export default function AdminCommunities() {
       delete newData[id]
       return newData
     })
+    setExpandedItem(null)
   }
 
   const createNewCommunity = () => {
@@ -416,7 +416,7 @@ export default function AdminCommunities() {
 
                   <div className="space-y-4">
                     {filteredCommunities.map((community) => {
-                      const isExpanded = expandedItems.has(community.id)
+                      const isExpanded = expandedItem === community.id
                       const isEditing = editingItems.has(community.id)
                       const isSaving = savingItems.has(community.id)
                       const formData = editFormData[community.id] || community
