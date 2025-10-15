@@ -5,6 +5,52 @@ import type { Community } from "./community"
 import type { EventTime } from "./event"
 import type { Warrior } from "./person"
 
+interface MkpConnectIGroup {
+  mkp_connect_id: number
+  igroup_name: string | null
+  about: string | null
+  igroup_type: string | null
+  igroup_status: string | null
+  igroup_class: string | null
+  // Address fields
+  address: string | null
+  city: string | null
+  postal_code: string | null
+  state_province: string | null
+  country: string | null
+  // Relationships (names)
+  community_name: string | null
+  area_name: string | null
+  owner_name: string | null
+  // Relationships (IDs)
+  community_id: number | null
+  area_id: number | null
+  owner_id: number | null
+  // Meeting details
+  meeting_night: string | null
+  meeting_time: string | null
+  meeting_frequency: string | null
+  // Location
+  latitude: string | null
+  longitude: string | null
+  // Flags/Settings
+  is_accepting_initiated_visitors: string | null
+  is_accepting_uninitiated_visitors: string | null
+  is_accepting_new_members: string | null
+  igroup_is_private: string | null
+  is_public_display: string | null
+  igroup_email: string | null
+  igroup_is_mixed_gender: string | null
+  igroup_mkpi: string | null
+  // Contact information
+  mkp_connect_contact_uid: number | null
+  mkp_connect_contact_name: string | null
+  mkp_connect_contact_email: string | null
+  // Import details
+  imported_at: string | null
+  imported_from: string | null
+}
+
 export interface Group {
   id: string
   name: string
@@ -22,6 +68,8 @@ export interface Group {
   created_at: string
   updated_at: string
   deleted_at?: string | null
+  // TODO Do I need to genericize this? Or make it "any" type?
+  mkpconnect_data?: MkpConnectIGroup | null
 }
 
 export interface GroupWithRelations extends Group {
@@ -40,6 +88,9 @@ export interface IGroup extends Group {
   schedule_description: string | null
   area_id: string | null
   community_id: string | null
+  contact_email?: string | null
+  status?: string | null
+  class?: string | null
   area?: Area | null
   community?: Community | null
 }
@@ -63,6 +114,9 @@ export interface FGroup<W = any> extends Group {
   schedule_description: string | null
   area_id: string | null
   community_id: string | null
+  contact_email?: string | null
+  status?: string | null
+  class?: string | null
   area?: Area | null
   community?: Community | null
 }

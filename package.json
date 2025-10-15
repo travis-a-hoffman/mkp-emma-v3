@@ -32,7 +32,9 @@
     "export:people": "tsx scripts/export-people.ts",
     "import:people": "tsx scripts/import-people.ts",
     "export:venues": "tsx scripts/export-venues.ts",
-    "import:venues": "tsx scripts/import-venues.ts"
+    "import:venues": "tsx scripts/import-venues.ts",
+    "transform:groups": "tsx scripts/transform-groups.ts --source-host mkpconnect.org --host mkp-emma-v3.vercel.app",
+    "import:groups": "tsx scripts/import-groups.ts"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "latest",

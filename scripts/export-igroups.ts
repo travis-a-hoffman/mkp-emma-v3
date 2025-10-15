@@ -9,31 +9,55 @@ import { fileURLToPath } from "node:url"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-interface ExportedIGroup {
+interface MkpConnectIGroup {
+  // Core fields
   mkp_connect_id: number
   igroup_name: string | null
+  about: string | null
   igroup_type: string | null
   igroup_status: string | null
-  owner: string | null
-  format: string | null
+  igroup_class: string | null
+
+  // Address fields
+  address: string | null
+  city: string | null
+  postal_code: string | null
+  state_province: string | null
+  country: string | null
+
+  // Relationships (names)
+  community_name: string | null
+  area_name: string | null
+  owner_name: string | null
+
+  // Relationships (IDs)
+  community_id: number | null
+  area_id: number | null
+  owner_id: number | null
+
+  // Meeting details
   meeting_night: string | null
   meeting_time: string | null
   meeting_frequency: string | null
-  area_name: string | null
-  community_name: string | null
-  city: string | null
-  state_province: string | null
-  postal_code: string | null
-  is_accepting_new_members: string | null
-  is_ok_initiated_visitors: string | null
-  is_ok_uninitiated_visitors: string | null
-  is_public_display: number | null
-  is_mixed_gender: number | null
-  mkp_connect_contact_uid: number | null
-  mkp_connect_contact_name: string | null
-  public_contact: string | null
+
+  // Location
   latitude: string | null
   longitude: string | null
+
+  // Flags/Settings
+  is_accepting_initiated_visitors: string | null
+  is_accepting_uninitiated_visitors: string | null
+  is_accepting_new_members: string | null
+  igroup_is_private: string | null
+  is_public_display: string | null
+  igroup_email: string | null
+  igroup_is_mixed_gender: string | null
+  igroup_mkpi: string | null
+
+  // Contact information
+  mkp_connect_contact_uid: number | null
+  mkp_connect_contact_name: string | null
+  mkp_connect_contact_email: string | null
 }
 
 async function main() {
@@ -114,59 +138,51 @@ async function main() {
     // Execute the query
     const rows = await conn.query(`
       SELECT
-          connect_drupal.node.nid as mkp_connect_id,
-          connect_drupal.node.title as igroup_name,
-          connect_drupal.field_data_field_igroup_type.field_igroup_type_value as igroup_type,
-          connect_drupal.field_data_field_igroup_status.field_igroup_status_value as igroup_status,
-          connect_drupal.field_data_field_owner.field_owner_value as owner,
-          connect_drupal.field_data_field_venue.field_venue_value as format,
-          connect_drupal.field_data_field_meeting_night.field_meeting_night_value as meeting_night,
-          connect_drupal.field_data_field_meeting_time.field_meeting_time_value as meeting_time,
-          connect_drupal.field_data_field_frequency.field_frequency_value as meeting_frequency,
-          connect_drupal.field_data_field_area.field_area_value as area_name,
-          connect_drupal.field_data_field_community.field_community_value as community_name,
-          connect_drupal.field_data_field_city.field_city_value as city,
-          connect_drupal.field_data_field_state_province.field_state_province_value as state_province,
-          connect_drupal.field_data_field_postal_code.field_postal_code_value as postal_code,
-          connect_drupal.field_data_field_igroup_new_members.field_igroup_new_members_value as is_accepting_new_members,
-          connect_drupal.field_data_field_igroup_initiated_visit.field_igroup_initiated_visit_value as is_ok_initiated_visitors,
-          connect_drupal.field_data_field_igroup_uninitiated_visit.field_igroup_uninitiated_visit_value as is_ok_uninitiated_visitors,
-          connect_drupal.field_data_field_public_display.field_public_display_value as is_public_display,
-          connect_drupal.field_data_field_mixed_gender.field_mixed_gender_value as is_mixed_gender,
-          connect_drupal.field_data_field_contact.field_contact_uid as mkp_connect_contact_uid,
+          nid as mkp_connect_id,
+          title as igroup_name,
+          field_about_entity_value as about,
+          field_igroup_type_value as igroup_type,
+          field_igroup_status_value as igroup_status,
+          field_igroup_class_value as igroup_class,
+
+          field_address_value as address,
+          field_city_value as city,
+          field_postal_code_value as postal_code,
+          field_state_province_value as state_province,
+          field_country_value as country,
+
+          field_community_value as community_name,
+          field_community_nid_value as community_id,
+          field_area_value as area_name,
+          field_area_nid_value as area_id,
+
+          field_owner_value as owner_name,
+          field_owner_nid_value as owner_id,
+
+          field_meeting_night_value as meeting_night,
+          field_meeting_time_value as meeting_time,
+          field_frequency_value as meeting_frequency,
+
+          field_latitude_value as latitude,
+          field_longitude_value as longitude,
+
+          field_igroup_initiated_visit_value as is_accepting_initiated_visitors,
+          field_igroup_uninitiated_visit_value as is_accepting_uninitiated_visitors,
+          field_igroup_new_members_value as is_accepting_new_members,
+          field_private_value as igroup_is_private,
+          field_public_display_value as is_public_display,
+          field_group_email_value as igroup_email,
+          field_mixed_gender_value as igroup_is_mixed_gender,
+          field_mkpi_value as igroup_mkpi,
+
+          field_contact_uid as mkp_connect_contact_uid,
           connect_civicrm.civicrm_contact.display_name as mkp_connect_contact_name,
-          connect_drupal.field_data_field_public_contact.field_public_contact_value as public_contact,
-          connect_drupal.field_data_field_latitude.field_latitude_value as latitude,
-          connect_drupal.field_data_field_longitude.field_longitude_value as longitude
-      FROM
-          connect_drupal.node
-              LEFT OUTER JOIN connect_drupal.field_data_field_owner ON node.nid = field_data_field_owner.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_venue ON node.nid = field_data_field_venue.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_public_display ON node.nid = field_data_field_public_display.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_meeting_night ON node.nid = field_data_field_meeting_night.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_meeting_time ON node.nid = field_data_field_meeting_time.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_frequency ON node.nid = field_data_field_frequency.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_area ON node.nid = field_data_field_area.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_community ON node.nid = field_data_field_community.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_city ON node.nid = field_data_field_city.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_state_province ON node.nid = field_data_field_state_province.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_igroup_new_members ON node.nid = field_data_field_igroup_new_members.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_igroup_initiated_visit ON node.nid = field_data_field_igroup_initiated_visit.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_igroup_uninitiated_visit ON node.nid = field_data_field_igroup_uninitiated_visit.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_mixed_gender ON node.nid = field_data_field_mixed_gender.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_contact ON node.nid = field_data_field_contact.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_postal_code ON node.nid = field_data_field_postal_code.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_igroup_type ON node.nid = field_data_field_igroup_type.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_igroup_status ON node.nid = field_data_field_igroup_status.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_latitude ON node.nid = field_data_field_latitude.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_longitude ON node.nid = field_data_field_longitude.entity_id
-              LEFT OUTER JOIN connect_drupal.field_data_field_public_contact ON node.nid = field_data_field_public_contact.entity_id
-              LEFT OUTER JOIN connect_civicrm.civicrm_uf_match ON connect_drupal.field_data_field_contact.field_contact_uid = connect_civicrm.civicrm_uf_match.uf_id
-              LEFT OUTER JOIN connect_civicrm.civicrm_contact ON connect_civicrm.civicrm_uf_match.contact_id = connect_civicrm.civicrm_contact.id
-      WHERE
-          node.type = 'igroups'
-      ORDER BY
-          igroup_name
+          connect_civicrm.civicrm_email.email as mkp_connect_contact_email
+      FROM connect_drupal.igroups
+          LEFT JOIN connect_civicrm.civicrm_contact ON connect_drupal.igroups.field_contact_uid = connect_civicrm.civicrm_contact.id
+          LEFT JOIN connect_civicrm.civicrm_email ON connect_drupal.igroups.field_contact_uid = connect_civicrm.civicrm_email.contact_id
+      WHERE field_country_value = 'United States'
+      ORDER BY title
     `)
 
     if (!rows || rows.length === 0) {
@@ -184,31 +200,55 @@ async function main() {
     let exportedCount = 0
 
     for (const row of rows) {
-      const exportData: ExportedIGroup = {
+      const exportData: MkpConnectIGroup = {
+        // Core fields
         mkp_connect_id: row.mkp_connect_id,
         igroup_name: row.igroup_name,
+        about: row.about,
         igroup_type: row.igroup_type,
         igroup_status: row.igroup_status,
-        owner: row.owner,
-        format: row.format,
+        igroup_class: row.igroup_class,
+
+        // Address fields
+        address: row.address,
+        city: row.city,
+        postal_code: row.postal_code,
+        state_province: row.state_province,
+        country: row.country,
+
+        // Relationships (names)
+        community_name: row.community_name,
+        area_name: row.area_name,
+        owner_name: row.owner_name,
+
+        // Relationships (IDs)
+        community_id: row.community_id,
+        area_id: row.area_id,
+        owner_id: row.owner_id,
+
+        // Meeting details
         meeting_night: row.meeting_night,
         meeting_time: row.meeting_time,
         meeting_frequency: row.meeting_frequency,
-        area_name: row.area_name,
-        community_name: row.community_name,
-        city: row.city,
-        state_province: row.state_province,
-        postal_code: row.postal_code,
-        is_accepting_new_members: row.is_accepting_new_members,
-        is_ok_initiated_visitors: row.is_ok_initiated_visitors,
-        is_ok_uninitiated_visitors: row.is_ok_uninitiated_visitors,
-        is_public_display: row.is_public_display,
-        is_mixed_gender: row.is_mixed_gender,
-        mkp_connect_contact_uid: row.mkp_connect_contact_uid,
-        mkp_connect_contact_name: row.mkp_connect_contact_name,
-        public_contact: row.public_contact,
+
+        // Location
         latitude: row.latitude,
         longitude: row.longitude,
+
+        // Flags/Settings
+        is_accepting_initiated_visitors: row.is_accepting_initiated_visitors,
+        is_accepting_uninitiated_visitors: row.is_accepting_uninitiated_visitors,
+        is_accepting_new_members: row.is_accepting_new_members,
+        igroup_is_private: row.igroup_is_private,
+        is_public_display: row.is_public_display,
+        igroup_email: row.igroup_email,
+        igroup_is_mixed_gender: row.igroup_is_mixed_gender,
+        igroup_mkpi: row.igroup_mkpi,
+
+        // Contact information
+        mkp_connect_contact_uid: row.mkp_connect_contact_uid,
+        mkp_connect_contact_name: row.mkp_connect_contact_name,
+        mkp_connect_contact_email: row.mkp_connect_contact_email,
       }
 
       // Use sanitized name for filename

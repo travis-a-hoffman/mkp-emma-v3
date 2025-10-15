@@ -12,6 +12,7 @@ export interface Community {
   is_active: boolean
   created_at?: string
   updated_at?: string
+  deleted_at?: string | null
 }
 
 // Utility types for different use cases

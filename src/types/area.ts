@@ -12,6 +12,7 @@ export interface Area {
   is_active: boolean
   created_at?: string
   updated_at?: string
+  deleted_at?: string | null
   admins?: Array<{
     id: string
     first_name: string
