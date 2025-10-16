@@ -68,6 +68,8 @@ export interface Group {
   created_at: string
   updated_at: string
   deleted_at?: string | null
+  latitude?: number | null
+  longitude?: number | null
   // TODO Do I need to genericize this? Or make it "any" type?
   mkpconnect_data?: MkpConnectIGroup | null
 }
@@ -90,7 +92,7 @@ export interface IGroup extends Group {
   community_id: string | null
   contact_email?: string | null
   status?: string | null
-  class?: string | null
+  affiliation?: string | null
   area?: Area | null
   community?: Community | null
 }
@@ -116,7 +118,7 @@ export interface FGroup<W = any> extends Group {
   community_id: string | null
   contact_email?: string | null
   status?: string | null
-  class?: string | null
+  affiliation?: string | null
   area?: Area | null
   community?: Community | null
 }

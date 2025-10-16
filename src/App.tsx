@@ -44,6 +44,8 @@ import Join from "./pages/join/Join"
 import JoinWelcome from "./pages/join/JoinWelcome"
 import JoinProfileImport from "./pages/join/JoinProfileImport"
 import JoinProfileSetup from "./pages/join/JoinProfileSetup"
+import AdminGroups from "@/src/pages/admin/AdminGroups.tsx";
+import AdminIGroups from "@/src/pages/admin/AdminIGroups.tsx";
 
 function App() {
   return (
@@ -92,6 +94,8 @@ function App() {
             <Route path="/admin/registrants" element={<AdminRegistrants />} />
             <Route path="/admin/friends" element={<AdminFriends />} />
             <Route path="/admin/affiliates" element={<AdminAffiliates />} />
+            <Route path="/admin/groups" element={<AdminGroups />} />
+            <Route path="/admin/i-groups" element={<AdminIGroups />} />
           </Routes>
         </MkpConnectProvider>
       </EmmaProvider>

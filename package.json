@@ -18,6 +18,9 @@
     "export:communities": "tsx scripts/export-communities.ts",
     "import:communities": "tsx scripts/import-communities.ts",
     "export:igroups": "tsx scripts/export-igroups.ts",
+    "export:igroup-membership": "tsx scripts/export-igroup-membership.ts",
+    "extract:warriors": "tsx scripts/extract-warriors-from-groups.ts",
+    "import:warriors": "tsx scripts/import-warriors.ts",
     "export:mkp-area-zipcodes": "tsx scripts/export-mkp-area-zipcodes.ts",
     "export:mkp-community-zipcodes": "tsx scripts/export-mkp-community-zipcodes.ts",
     "fill:mkp-area-counties": "tsx scripts/fill-mkp-area-counties.ts",
@@ -34,6 +37,7 @@
     "export:venues": "tsx scripts/export-venues.ts",
     "import:venues": "tsx scripts/import-venues.ts",
     "transform:groups": "tsx scripts/transform-groups.ts --source-host mkpconnect.org --host mkp-emma-v3.vercel.app",
+    "transform:igroup-membership": "tsx scripts/transform-igroup-membership.ts",
     "import:groups": "tsx scripts/import-groups.ts"
   },
   "dependencies": {

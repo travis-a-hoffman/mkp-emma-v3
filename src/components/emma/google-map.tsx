@@ -2,8 +2,17 @@
 
 import { useEffect, useRef, useState } from "react"
 
+interface MarkerData {
+  lat: number
+  lng: number
+  title: string
+  info: string
+  id: string
+}
+
 interface GoogleMapProps {
-  geoPolygon: any
+  geoPolygon?: any
+  markers?: MarkerData[]
   className?: string
 }
 
@@ -14,7 +23,7 @@ declare global {
   }
 }
 
-export function GoogleMap({ geoPolygon, className = "w-full aspect-video" }: GoogleMapProps) {
+export function GoogleMap({ geoPolygon, markers, className = "w-full aspect-video" }: GoogleMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +66,7 @@ export function GoogleMap({ geoPolygon, className = "w-full aspect-video" }: Goo
   }, [])
 
   useEffect(() => {
-    if (!isLoaded || !mapRef.current || !geoPolygon) return
+    if (!isLoaded || !mapRef.current || (!geoPolygon && !markers)) return
 
     try {
       // Initialize map
@@ -69,8 +78,8 @@ export function GoogleMap({ geoPolygon, className = "w-full aspect-video" }: Goo
 
       const bounds = new window.google.maps.LatLngBounds()
 
-      // Parse GeoJSON and add to map
-      if (geoPolygon.type === "Polygon" && geoPolygon.coordinates) {
+      // Parse GeoJSON and add to map (if provided)
+      if (geoPolygon && geoPolygon.type === "Polygon" && geoPolygon.coordinates) {
         const coordinates = geoPolygon.coordinates[0] // First ring of polygon
         const polygonCoords = coordinates.map((coord: [number, number]) => ({
           lat: coord[1], // GeoJSON uses [lng, lat], Google Maps uses {lat, lng}
@@ -92,7 +101,7 @@ export function GoogleMap({ geoPolygon, className = "w-full aspect-video" }: Goo
         polygonCoords.forEach((coord: { lat: number; lng: number }) => {
           bounds.extend(coord)
         })
-      } else if (geoPolygon.type === "MultiPolygon") {
+      } else if (geoPolygon && geoPolygon.type === "MultiPolygon") {
         // Handle MultiPolygon - iterate through each polygon
         geoPolygon.coordinates.forEach((polygonCoordinates: any) => {
           const coordinates = polygonCoordinates[0] // First ring of each polygon
@@ -116,7 +125,7 @@ export function GoogleMap({ geoPolygon, className = "w-full aspect-video" }: Goo
             bounds.extend(coord)
           })
         })
-      } else if (geoPolygon.type === "FeatureCollection") {
+      } else if (geoPolygon && geoPolygon.type === "FeatureCollection") {
         // Handle FeatureCollection
         geoPolygon.features.forEach((feature: any) => {
           if (feature.geometry.type === "Polygon") {
@@ -168,6 +177,26 @@ export function GoogleMap({ geoPolygon, className = "w-full aspect-video" }: Goo
         })
       }
 
+      // Add markers if provided
+      if (markers && markers.length > 0) {
+        const infoWindow = new window.google.maps.InfoWindow()
+
+        markers.forEach((markerData) => {
+          const marker = new window.google.maps.Marker({
+            position: { lat: markerData.lat, lng: markerData.lng },
+            map: map,
+            title: markerData.title,
+          })
+
+          marker.addListener("click", () => {
+            infoWindow.setContent(markerData.info)
+            infoWindow.open(map, marker)
+          })
+
+          bounds.extend(marker.getPosition() as any)
+        })
+      }
+
       if (!bounds.isEmpty()) {
         map.fitBounds(bounds)
       }
@@ -175,17 +204,21 @@ export function GoogleMap({ geoPolygon, className = "w-full aspect-video" }: Goo
       console.error("[v0] Error rendering map:", err)
       setError("Failed to render geographic data on map")
     }
-  }, [isLoaded, geoPolygon])
+  }, [isLoaded, geoPolygon, markers])
 
   if (error) {
     return (
       <div className={`${className} bg-gray-100 border border-gray-300 rounded flex items-center justify-center`}>
         <div className="text-center text-gray-600">
           <p className="text-sm">{error}</p>
-          <p className="text-xs mt-1">Showing raw data instead:</p>
-          <pre className="text-xs mt-2 bg-white p-2 rounded max-h-32 overflow-auto">
-            {JSON.stringify(geoPolygon, null, 2)}
-          </pre>
+          {(geoPolygon || markers) && (
+            <>
+              <p className="text-xs mt-1">Showing raw data instead:</p>
+              <pre className="text-xs mt-2 bg-white p-2 rounded max-h-32 overflow-auto">
+                {JSON.stringify(geoPolygon || markers, null, 2)}
+              </pre>
+            </>
+          )}
         </div>
       </div>
     )

@@ -946,3 +946,560 @@ Based on current MKP Connect data:
   - Counties: `gz_2010_us_050_00_5m.json`
 - ndrezn/zip-code-geojson - 100m resolution US ZIP code boundaries (MIT/Creative Commons)
   - File: `usa_zip_codes_geo_100m.json`
+
+---
+
+## MKP Connect Groups & Warriors Migration Pipeline
+
+This section documents the complete workflow for migrating groups (I-Groups and F-Groups), group membership data, and warrior information from the legacy MKP Connect MariaDB database to Emma v3 Supabase.
+
+### Overview
+
+**Purpose**: Extract group entities, membership rosters, and warrior data from MKP Connect, transform into Emma v3 format with proper normalization, and import into PostgreSQL/Supabase.
+
+**Key Features**:
+- Exports I-Groups (Integration Groups) and F-Groups (Facilitation Groups) from MKP Connect
+- Extracts group membership rosters linking groups to warriors
+- Deduplicates and normalizes warrior data across all groups
+- Transforms groups with proper area/community references and location data
+- Maps group membership to warrior UUIDs with dual lookup (CiviCRM ID + email fallback)
+- Normalizes latitude/longitude as database columns (not buried in JSONB)
+- Renames problematic "class" field to "affiliation" (avoids TypeScript reserved word)
+- Imports to two-table pattern: groups base table + i_groups/f_groups extension tables
+
+**Data Flow**:
+```
+MKP Connect (MariaDB)
+  → I-Group JSON files (metadata, location, meeting info)
+  → Membership JSON files (group rosters)
+  → Warrior extraction (deduplicated across all groups)
+  → Warrior import (people + warriors tables)
+  → Group transformation (normalize, resolve references)
+  → Membership transformation (map to warrior UUIDs)
+  → Group import (groups + i_groups/f_groups tables)
+  → Emma v3 (Supabase)
+```
+
+### Scripts Involved
+
+#### Export Scripts (from MKP Connect)
+
+1. **`export-igroups.ts`**
+   - Exports I-Groups (integration groups) from MKP Connect MariaDB
+   - Source: Complex SQL join across multiple MKP Connect tables
+   - Output: One JSON file per group in `scripts/data/{hostname}/igroups/`
+   - Includes: All group metadata, address, meeting schedule, location (lat/lng), area/community names and IDs, contact info, flags
+   - Usage: `pnpm export:igroups [.env file] [--pretty] [--host hostname]`
+   - Example: `pnpm export:igroups .env.mkpconnect --pretty`
+
+2. **`export-igroup-membership.ts`**
+   - Exports group membership rosters from MKP Connect
+   - Source: SQL join of groups, group members, and user data
+   - Output: One JSON file per group in `scripts/data/{hostname}/igroups/membership/`
+   - Includes: Group ID, group email, group type, array of member records (with CiviCRM ID, email, names, IEN, etc.)
+   - Usage: `pnpm export:igroup-membership [.env file] [--pretty] [--host hostname]`
+   - Example: `pnpm export:igroup-membership .env.mkpconnect --pretty`
+
+**Environment variables required**:
+```env
+MKPCONNECT_DB_HOST=mkpconnect.org
+MKPCONNECT_DB_USERNAME=your-username
+MKPCONNECT_DB_PASSWORD=your-password
+MKPCONNECT_CIVICRM_DB_NAME=connect_civicrm
+```
+
+#### Extract/Transform Scripts
+
+3. **`extract-warriors-from-groups.ts`**
+   - Extracts unique warriors from all group membership files
+   - Deduplicates warriors across all groups (by CiviCRM ID and email)
+   - Generates Person records with warrior-specific metadata
+   - Output: One JSON file per warrior in `scripts/data/{hostname}/warriors/`
+   - Includes: Person fields (name, email) + warrior fields (IEN, birth_date, CiviCRM ID, image_URL, etc.)
+   - Creates lookup maps for later membership transformation
+   - Usage: `pnpm extract:warriors [--source-host hostname] [--host hostname] [--pretty]`
+   - Example: `pnpm extract:warriors --source-host mkpconnect.org --host mkp-emma-v3.vercel.app --pretty`
+
+4. **`transform-groups.ts`**
+   - Transforms MKP Connect group data into Emma v3 format
+   - Separates groups into I-Groups vs F-Groups based on type/name
+   - **Key transformations**:
+     - Extracts `latitude` and `longitude` as normalized numeric fields (not in mkpconnect_data JSONB)
+     - Renames `class` field to `affiliation` (avoids TypeScript reserved word)
+     - Resolves area_id and community_id by looking up UUIDs from area/community files
+     - Parses meeting schedule into description string
+     - Converts MKP Connect boolean strings ("Yes"/"No"/"Contact") to proper booleans
+     - Filters out lat/lng = 0 (placeholder values)
+     - Validates coordinate ranges: lat [-90, 90], lng [-180, 180]
+   - Output: Groups in `scripts/data/{hostname}/i-groups/` and `scripts/data/{hostname}/f-groups/`
+   - Requires: Areas and communities must be imported first (for UUID lookup)
+   - Usage: `pnpm transform:groups [--source-host hostname] [--host hostname] [--pretty]`
+   - Example: `pnpm transform:groups --source-host mkpconnect.org --host mkp-emma-v3.vercel.app --pretty`
+
+5. **`transform-igroup-membership.ts`**
+   - Maps group membership to warrior UUIDs
+   - Uses dual lookup strategy:
+     - **Primary**: Match by CiviCRM user ID
+     - **Fallback**: Match by email address
+   - Populates `members` field in group JSON files
+   - Output format: `members: [{id: "warrior-uuid"}, {id: "warrior-uuid"}, ...]` (array of objects, not strings)
+   - Statistics: Reports matched warriors, not found, and groups without membership data
+   - Usage: `pnpm transform:igroup-membership [--source-host hostname] [--host hostname]`
+   - Example: `pnpm transform:igroup-membership --source-host mkpconnect.org --host mkp-emma-v3.vercel.app`
+
+#### Import Scripts
+
+6. **`import-warriors.ts`**
+   - Imports warriors to Emma v3 people and warriors tables
+   - Two-table pattern: Inserts into `people` first, then `warriors` (1:1 FK relationship)
+   - **Validation**: Checks for existing records by ID
+   - **Conflict handling**:
+     - Default: Skips warriors that already exist
+     - `--force`: Updates existing records
+   - Usage: `pnpm import:warriors [.env file] [--force]`
+   - Example: `pnpm import:warriors .env.emma-v3 --force`
+
+7. **`import-groups.ts`**
+   - Imports groups, i-groups, and f-groups to Emma v3
+   - Three-table pattern: `groups` (base) + `i_groups` or `f_groups` (extension)
+   - **Validation**: Checks all foreign keys before import:
+     - area_id → areas
+     - community_id → communities
+     - venue_id → venues
+     - public_contact_id, primary_contact_id → people
+   - **Conflict handling**:
+     - Default: Skips groups that already exist (matched by ID)
+     - `--force`: Updates existing records
+   - **Features**:
+     - Imports latitude/longitude as numeric columns
+     - Imports affiliation field (renamed from class)
+     - Imports members array as JSONB
+     - Stores full mkpconnect_data for reference
+   - Usage: `pnpm import:groups [.env file] [--force]`
+   - Example: `pnpm import:groups .env.emma-v3 --force`
+
+### Database Schema
+
+#### Groups Tables
+
+**groups** (base table):
+```sql
+- id (uuid, primary key)
+- name (text, required)
+- description (text, required)
+- url (text, nullable)
+- members (jsonb, array of {id: uuid})
+- is_accepting_new_members (boolean, default false)
+- membership_criteria (text, nullable)
+- venue_id (uuid, FK to venues)
+- genders (text, nullable, e.g., "Men's", "Mixed Gender")
+- is_publicly_listed (boolean, default false)
+- public_contact_id (uuid, FK to people)
+- primary_contact_id (uuid, FK to people)
+- is_active (boolean, default true)
+- created_at (timestamp)
+- updated_at (timestamp)
+- deleted_at (timestamp, nullable)
+- photo_url (text, nullable)
+- latitude (numeric(10, 6), nullable)  -- NEW: normalized location
+- longitude (numeric(10, 6), nullable) -- NEW: normalized location
+- mkpconnect_data (jsonb, nullable)    -- Full MKP Connect record for reference
+```
+
+**i_groups** (extension table for integration groups):
+```sql
+- id (uuid, primary key, FK to groups.id CASCADE)
+- log_id (uuid, nullable)
+- is_accepting_initiated_visitors (boolean, default false)
+- is_accepting_uninitiated_visitors (boolean, default false)
+- is_requiring_contact_before_visiting (boolean, default false)
+- schedule_events (jsonb, array of event times)
+- schedule_description (text, nullable, e.g., "Weekly on Tues at 7:00 PM")
+- area_id (uuid, FK to areas)
+- community_id (uuid, FK to communities)
+- contact_email (text, nullable)        -- NEW
+- status (varchar(50), nullable)        -- NEW, e.g., "Open", "Closed"
+- affiliation (varchar(50), nullable)   -- NEW, renamed from "class"
+- is_active (boolean, default true)
+- created_at (timestamp)
+- updated_at (timestamp)
+- deleted_at (timestamp, nullable)
+```
+
+**f_groups** (extension table for facilitation groups):
+```sql
+- id (uuid, primary key, FK to groups.id CASCADE)
+- log_id (uuid, nullable)
+- group_type (text, e.g., "Men's", "Mixed Gender", "Open Men's", "Closed Men's")
+- is_accepting_new_facilitators (boolean, default false)
+- facilitators (jsonb, array of warrior IDs)
+- is_accepting_initiated_visitors (boolean, default false)
+- is_accepting_uninitiated_visitors (boolean, default false)
+- is_requiring_contact_before_visiting (boolean, default false)
+- schedule_events (jsonb, array of event times)
+- schedule_description (text, nullable)
+- area_id (uuid, FK to areas)
+- community_id (uuid, FK to communities)
+- contact_email (text, nullable)        -- NEW
+- status (varchar(50), nullable)        -- NEW
+- affiliation (varchar(50), nullable)   -- NEW, renamed from "class"
+- is_active (boolean, default true)
+- created_at (timestamp)
+- updated_at (timestamp)
+- deleted_at (timestamp, nullable)
+```
+
+#### Warriors Tables
+
+**people** (extended by warriors):
+```sql
+- id (uuid)
+- first_name (text)
+- middle_name (text)
+- last_name (text)
+- email (text)
+- phone (text)
+- billing_address_id (uuid, FK to addresses)
+- mailing_address_id (uuid, FK to addresses)
+- physical_address_id (uuid, FK to addresses)
+- notes (text)
+- photo_url (text)
+- is_active (boolean)
+- created_at (timestamp)
+- updated_at (timestamp)
+- deleted_at (timestamp)
+- mkpconnect_data (jsonb)  -- NEW: stores warrior-specific MKP Connect data
+```
+
+**warriors** (extends people, 1:1 relationship):
+```sql
+- id (uuid, primary key, FK to people.id CASCADE)
+- person_id (uuid, FK to people.id, unique)
+- ien (text, nullable, Initiation Experience Number)
+- initiation_event_id (uuid, FK to events, nullable)
+- created_at (timestamp)
+- updated_at (timestamp)
+- deleted_at (timestamp)
+```
+
+### Complete Workflow
+
+Follow this order to respect foreign key dependencies:
+
+#### Phase 1: Export from MKP Connect
+
+```bash
+# Export group metadata
+pnpm export:igroups .env.mkpconnect --pretty
+
+# Export group membership rosters
+pnpm export:igroup-membership .env.mkpconnect --pretty
+```
+
+**Output**:
+- `scripts/data/mkpconnect.org/igroups/*.json` (~1,900 group files)
+- `scripts/data/mkpconnect.org/igroups/membership/*.json` (~1,900 membership files)
+
+#### Phase 2: Extract Warriors
+
+```bash
+# Extract unique warriors from all membership files
+pnpm extract:warriors --source-host mkpconnect.org --host mkp-emma-v3.vercel.app --pretty
+```
+
+**Output**:
+- `scripts/data/mkp-emma-v3.vercel.app/warriors/*.json` (~15,000-20,000 warrior files)
+- Deduplication: Warriors appearing in multiple groups only exported once
+- Creates lookup maps: by CiviCRM ID and by email
+
+**What happens**:
+- Reads all membership files
+- Extracts unique warriors (deduplicated by CiviCRM ID + email)
+- Generates Person fields from member data
+- Adds warrior-specific metadata (IEN, birth_date, etc.)
+- Stores full MKP Connect data in mkpconnect_data field
+
+#### Phase 3: Import Warriors (Prerequisite for Groups)
+
+```bash
+# Import warriors to people and warriors tables
+pnpm import:warriors .env.emma-v3
+```
+
+**Why first**: Groups reference warriors via the `members` field, so warriors must exist before importing groups.
+
+**Import summary example**:
+```
+📊 Import Summary:
+  ✓ Imported (people): 18,234
+  ✓ Imported (warriors): 18,234
+  ⊘ Skipped: 0
+  ✗ Errors: 0
+```
+
+#### Phase 4: Transform Groups
+
+**Prerequisites**: Areas and communities must already be imported (for area_id/community_id lookup).
+
+```bash
+# Transform groups from MKP Connect format to Emma v3 format
+pnpm transform:groups --source-host mkpconnect.org --host mkp-emma-v3.vercel.app --pretty
+```
+
+**Output**:
+- `scripts/data/mkp-emma-v3.vercel.app/i-groups/*.json` (~1,800 integration group files)
+- `scripts/data/mkp-emma-v3.vercel.app/f-groups/*.json` (~100 facilitation group files)
+
+**Transformation details**:
+- **Group type detection**:
+  - I-Groups: Default, or has "I-Group" in name
+  - F-Groups: Has "F-Group" or "Facilitation" in name, or igroup_type = "MKP F-Group"
+- **Latitude/longitude**:
+  - Extracted from mkpconnect_data.latitude/longitude
+  - Parsed as numbers and validated (lat: -90 to 90, lng: -180 to 180)
+  - Values of 0 filtered out (placeholder data)
+- **Field renaming**:
+  - `class` → `affiliation` (avoids TypeScript reserved word collision)
+- **Area/Community resolution**:
+  - Looks up area_id by matching area_name against imported area files
+  - Looks up community_id by matching community_name against imported community files
+  - Warns if not found, sets to null
+
+#### Phase 5: Transform Group Membership
+
+```bash
+# Map group membership to warrior UUIDs
+pnpm transform:igroup-membership --source-host mkpconnect.org --host mkp-emma-v3.vercel.app
+```
+
+**What happens**:
+- Reads warrior files to build lookup maps (by CiviCRM ID and email)
+- Reads membership files for each group
+- For each member:
+  1. Try lookup by civicrm_user_id (primary)
+  2. Fall back to email address if CiviCRM ID not found
+  3. Add `{id: warrior-uuid}` to group's members array
+- Updates group JSON files in-place
+- Reports statistics: matched, not found, groups without membership data
+
+**Output format**:
+```json
+{
+  "id": "group-uuid",
+  "name": "Portland Monday I-Group",
+  "members": [
+    {"id": "warrior-uuid-1"},
+    {"id": "warrior-uuid-2"},
+    {"id": "warrior-uuid-3"}
+  ],
+  ...
+}
+```
+
+**Statistics example**:
+```
+📊 Membership Transformation Summary:
+  ✓ Groups processed: 1,876
+  ✓ Members matched by CiviCRM ID: 14,532
+  ✓ Members matched by email: 1,203
+  ⚠ Members not found: 47
+  ⊘ Groups with no membership data: 12
+```
+
+#### Phase 6: Import Groups
+
+```bash
+# Import groups to Emma v3 (i-groups and f-groups)
+pnpm import:groups .env.emma-v3
+```
+
+**Import features**:
+- Validates all foreign keys:
+  - area_id → areas
+  - community_id → communities
+  - venue_id → venues (if set)
+  - public_contact_id, primary_contact_id → people (if set)
+  - members[].id → people (implicitly validated via warriors)
+- Two-table insert:
+  1. Insert into `groups` base table
+  2. Insert into `i_groups` or `f_groups` extension table (based on file source)
+- Stores latitude/longitude as numeric columns
+- Stores members as JSONB array
+- Full mkpconnect_data preserved for reference
+
+**Import summary example**:
+```
+📊 Import Summary - I-Groups:
+  ✓ Imported: 1,804
+  ↻ Updated: 0
+  ⊘ Skipped: 72 (use --force to update)
+  ✗ Errors: 0
+
+📊 Import Summary - F-Groups:
+  ✓ Imported: 98
+  ↻ Updated: 0
+  ⊘ Skipped: 5
+  ✗ Errors: 0
+```
+
+### Complete Migration Order
+
+When migrating all data from MKP Connect to Emma v3, follow this order:
+
+```bash
+# 1. Export areas/communities from MKP Connect (if not already done)
+# (See "MKP Connect Data Migration & GeoJSON Enhancement Pipeline" section above)
+
+# 2. Import areas and communities
+pnpm import:areas .env.emma-v3
+pnpm import:communities .env.emma-v3
+
+# 3. Export groups and membership from MKP Connect
+pnpm export:igroups .env.mkpconnect --pretty
+pnpm export:igroup-membership .env.mkpconnect --pretty
+
+# 4. Extract and import warriors
+pnpm extract:warriors --source-host mkpconnect.org --host mkp-emma-v3.vercel.app --pretty
+pnpm import:warriors .env.emma-v3
+
+# 5. Transform groups and membership
+pnpm transform:groups --source-host mkpconnect.org --host mkp-emma-v3.vercel.app --pretty
+pnpm transform:igroup-membership --source-host mkpconnect.org --host mkp-emma-v3.vercel.app
+
+# 6. Import groups
+pnpm import:groups .env.emma-v3
+```
+
+### Key Features & Design Decisions
+
+#### Normalized Latitude/Longitude
+
+**Decision**: Extract lat/lng as top-level numeric columns instead of burying in mkpconnect_data JSONB.
+
+**Rationale**:
+- Enables efficient database queries and indexing
+- Supports PostGIS spatial operations
+- Avoids exposing internal MKP Connect data structure to API consumers
+- Simplifies frontend map rendering
+
+**Implementation**:
+- Parsed from string ("43.070000") to numeric (43.07)
+- Values of 0 filtered out (used as placeholder in source data)
+- Validation: lat ∈ [-90, 90], lng ∈ [-180, 180]
+- Storage: numeric(10, 6) for 6 decimal places (~0.11m precision)
+
+#### Field Renaming: class → affiliation
+
+**Decision**: Rename "class" field to "affiliation" throughout the entire pipeline.
+
+**Rationale**:
+- "class" is a reserved word in TypeScript/JavaScript
+- Causes syntax errors and maintenance issues
+- "affiliation" better describes the semantic meaning (e.g., "MKPI", "Independent")
+
+**Impact**:
+- Updated in type definitions (src/types/group.ts)
+- Updated in transform script (scripts/transform-groups.ts)
+- Updated in import script (scripts/import-groups.ts)
+- Updated in database schemas (06-create-i-groups-table.sql, 07-create-f-groups-table.sql)
+- All downstream code uses "affiliation" field name
+
+#### Members Field Format
+
+**Decision**: Store members as `[{id: "uuid"}, {id: "uuid"}, ...]` instead of `["uuid", "uuid", ...]`
+
+**Rationale**:
+- Allows future expansion (e.g., role, joined_at, status)
+- Consistent with other relationship patterns in Emma v3
+- More explicit and self-documenting
+
+**Example**:
+```json
+{
+  "members": [
+    {"id": "123e4567-e89b-12d3-a456-426614174000"},
+    {"id": "987fcdeb-51a2-43d7-8f9e-0123456789ab"}
+  ]
+}
+```
+
+#### Dual Lookup Strategy
+
+**Decision**: Match warriors by CiviCRM ID first, fall back to email if not found.
+
+**Rationale**:
+- CiviCRM ID is the primary key in MKP Connect
+- Email addresses may change or have typos
+- Some warriors may not have CiviCRM IDs (legacy data)
+- Maximizes successful matches while maintaining data integrity
+
+**Statistics** (typical):
+- ~92% matched by CiviCRM ID
+- ~7% matched by email fallback
+- ~1% not found (data quality issues)
+
+### Troubleshooting
+
+**Issue**: Warriors not found during membership transformation
+
+**Causes**:
+- Warrior doesn't exist in warriors/ directory (not extracted)
+- CiviCRM ID mismatch between membership and user data
+- Email address differs or missing
+
+**Solutions**:
+- Re-run `extract:warriors` to ensure all warriors extracted
+- Check membership file for valid CiviCRM IDs and emails
+- Manually investigate not-found warriors in MKP Connect database
+
+---
+
+**Issue**: Foreign key validation errors during group import
+
+**Causes**:
+- area_id or community_id references area/community that doesn't exist
+- Area/community not imported yet
+- UUID mismatch (transformed with different area/community files)
+
+**Solutions**:
+- Import areas and communities before importing groups
+- Re-run `transform:groups` if areas/communities were reimported with new UUIDs
+- Check transform script output for warnings about missing area/community lookups
+
+---
+
+**Issue**: Latitude/longitude = 0 in source data
+
+**Behavior**: These are intentionally filtered out during transformation.
+
+**Rationale**: MKP Connect uses "0.000000" as placeholder for missing location data. These represent invalid locations (would be in the Gulf of Guinea) and are excluded to prevent map display issues.
+
+---
+
+**Issue**: Duplicate warriors with different CiviCRM IDs
+
+**Cause**: Same person registered multiple times in MKP Connect with different accounts.
+
+**Solution**: Manual data cleanup required in MKP Connect, or use email-based deduplication by modifying extract-warriors.ts to prioritize email matching over CiviCRM ID.
+
+### Data Statistics
+
+Based on current MKP Connect data (as of October 2024):
+
+- **I-Groups**: ~1,800 integration groups
+- **F-Groups**: ~100 facilitation groups
+- **Warriors**: ~18,000 unique warriors (deduplicated across all groups)
+- **Average group size**: 8-12 members
+- **Groups with location data**: ~475 groups have valid latitude/longitude
+- **Groups with membership**: ~99% have at least one member
+- **Membership matches**:
+  - CiviCRM ID matches: ~92%
+  - Email fallback matches: ~7%
+  - Not found: ~1%
+
+### File Naming Conventions
+
+- **I-Groups**: `{sanitized-name}_{id-prefix}.json` (e.g., `Portland_Monday_I-Group_a1b2c3d4.json`)
+- **F-Groups**: `{sanitized-name}_{id-prefix}.json` (e.g., `Rocky_Mountain_F-Group_e5f6g7h8.json`)
+- **Warriors**: `{lastname}_{firstname}_{id-prefix}.json` (e.g., `Smith_John_i9j0k1l2.json`)
+- **Membership**: `{group-id}.json` (e.g., `879288.json` matches group with mkp_connect_id=879288)

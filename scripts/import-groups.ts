@@ -32,6 +32,8 @@ interface ImportedGroup {
   created_at: string
   updated_at: string
   deleted_at: string | null
+  latitude: number | null
+  longitude: number | null
   mkpconnect_data: any
 }
 
@@ -45,7 +47,7 @@ interface ImportedIGroup extends ImportedGroup {
   community_id: string | null
   contact_email: string | null
   status: string | null
-  class: string | null
+  affiliation: string | null
 }
 
 interface ImportedFGroup extends ImportedGroup {
@@ -61,7 +63,7 @@ interface ImportedFGroup extends ImportedGroup {
   community_id: string | null
   contact_email: string | null
   status: string | null
-  class: string | null
+  affiliation: string | null
 }
 
 interface ImportStats {
@@ -181,6 +183,8 @@ async function importIGroup(
         primary_contact_id: igroup.primary_contact_id,
         is_active: igroup.is_active,
         deleted_at: igroup.deleted_at,
+        latitude: igroup.latitude,
+        longitude: igroup.longitude,
         mkpconnect_data: igroup.mkpconnect_data,
         updated_at: new Date().toISOString(),
       })
@@ -203,6 +207,9 @@ async function importIGroup(
         schedule_description: igroup.schedule_description,
         area_id: igroup.area_id,
         community_id: igroup.community_id,
+        contact_email: igroup.contact_email,
+        status: igroup.status,
+        affiliation: igroup.affiliation,
         is_active: igroup.is_active,
         deleted_at: igroup.deleted_at,
         updated_at: new Date().toISOString(),
@@ -236,6 +243,8 @@ async function importIGroup(
       created_at: igroup.created_at,
       updated_at: igroup.updated_at,
       deleted_at: igroup.deleted_at,
+      latitude: igroup.latitude,
+      longitude: igroup.longitude,
       mkpconnect_data: igroup.mkpconnect_data,
     })
 
@@ -255,6 +264,9 @@ async function importIGroup(
       schedule_description: igroup.schedule_description,
       area_id: igroup.area_id,
       community_id: igroup.community_id,
+      contact_email: igroup.contact_email,
+      status: igroup.status,
+      affiliation: igroup.affiliation,
       is_active: igroup.is_active,
       created_at: igroup.created_at,
       updated_at: igroup.updated_at,
@@ -314,6 +326,8 @@ async function importFGroup(
         primary_contact_id: fgroup.primary_contact_id,
         is_active: fgroup.is_active,
         deleted_at: fgroup.deleted_at,
+        latitude: fgroup.latitude,
+        longitude: fgroup.longitude,
         mkpconnect_data: fgroup.mkpconnect_data,
         updated_at: new Date().toISOString(),
       })
@@ -339,6 +353,9 @@ async function importFGroup(
         schedule_description: fgroup.schedule_description,
         area_id: fgroup.area_id,
         community_id: fgroup.community_id,
+        contact_email: fgroup.contact_email,
+        status: fgroup.status,
+        affiliation: fgroup.affiliation,
         is_active: fgroup.is_active,
         deleted_at: fgroup.deleted_at,
         updated_at: new Date().toISOString(),
@@ -372,6 +389,8 @@ async function importFGroup(
       created_at: fgroup.created_at,
       updated_at: fgroup.updated_at,
       deleted_at: fgroup.deleted_at,
+      latitude: fgroup.latitude,
+      longitude: fgroup.longitude,
       mkpconnect_data: fgroup.mkpconnect_data,
     })
 
@@ -394,6 +413,9 @@ async function importFGroup(
       schedule_description: fgroup.schedule_description,
       area_id: fgroup.area_id,
       community_id: fgroup.community_id,
+      contact_email: fgroup.contact_email,
+      status: fgroup.status,
+      affiliation: fgroup.affiliation,
       is_active: fgroup.is_active,
       created_at: fgroup.created_at,
       updated_at: fgroup.updated_at,

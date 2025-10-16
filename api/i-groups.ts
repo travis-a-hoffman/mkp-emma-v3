@@ -92,6 +92,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             created_at,
             updated_at,
             deleted_at,
+            latitude,
+            longitude,
             i_groups!inner (
               is_accepting_initiated_visitors,
               is_accepting_uninitiated_visitors,
@@ -169,6 +171,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               created_at: iGroupData.created_at,
               updated_at: iGroupData.updated_at,
               deleted_at: group.deleted_at,
+              latitude: group.latitude,
+              longitude: group.longitude,
               is_accepting_initiated_visitors: iGroupData.is_accepting_initiated_visitors,
               is_accepting_uninitiated_visitors: iGroupData.is_accepting_uninitiated_visitors,
               is_requiring_contact_before_visiting: iGroupData.is_requiring_contact_before_visiting,

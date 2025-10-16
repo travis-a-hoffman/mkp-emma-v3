@@ -16,6 +16,8 @@ create table public.groups (
   updated_at timestamp with time zone null default now(),
   deleted_at timestamp with time zone null,
   photo_url text null,
+  latitude numeric(10, 6) null,
+  longitude numeric(10, 6) null,
   mkpconnect_data jsonb null,
   constraint groups_pkey primary key (id),
   constraint groups_primary_contact_id_fkey foreign KEY (primary_contact_id) references people (id) on delete set null,

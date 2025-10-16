@@ -67,6 +67,8 @@ interface TranslatedGroup {
   created_at: string
   updated_at: string
   deleted_at: string | null
+  latitude: number | null
+  longitude: number | null
   mkpconnect_data: MkpConnectIGroup
 }
 
@@ -80,7 +82,7 @@ interface TranslatedIGroup extends TranslatedGroup {
   community_id: string | null
   contact_email: string | null
   status: string | null
-  class: string | null
+  affiliation: string | null
 }
 
 interface TranslatedFGroup extends TranslatedGroup {
@@ -96,7 +98,7 @@ interface TranslatedFGroup extends TranslatedGroup {
   community_id: string | null
   contact_email: string | null
   status: string | null
-  class: string | null
+  affiliation: string | null
 }
 
 interface AreaMapping {
@@ -245,6 +247,22 @@ function sanitizeForFilename(name: string): string {
     .substring(0, 50)
 }
 
+function parseLatitude(lat: string | null): number | null {
+  if (!lat) return null
+  const parsed = parseFloat(lat)
+  if (isNaN(parsed) || parsed === 0) return null
+  if (parsed < -90 || parsed > 90) return null
+  return parsed
+}
+
+function parseLongitude(lng: string | null): number | null {
+  if (!lng) return null
+  const parsed = parseFloat(lng)
+  if (isNaN(parsed) || parsed === 0) return null
+  if (parsed < -180 || parsed > 180) return null
+  return parsed
+}
+
 function lookupAreaId(
   areaName: string | null,
   areaId: number | null,
@@ -315,6 +333,8 @@ function createBaseGroup(data: MkpConnectIGroup): TranslatedGroup {
     created_at: now,
     updated_at: now,
     deleted_at: null,
+    latitude: parseLatitude(data.latitude),
+    longitude: parseLongitude(data.longitude),
     mkpconnect_data: data,
   }
 }
@@ -340,7 +360,7 @@ function translateToIGroup(
     community_id: lookupCommunityId(data.community_name, data.community_id, communitiesMap),
     contact_email: data.igroup_email,
     status: data.igroup_status,
-    class: data.igroup_class,
+    affiliation: data.igroup_class,
   }
 }
 
@@ -368,7 +388,7 @@ function translateToFGroup(
     community_id: lookupCommunityId(data.community_name, data.community_id, communitiesMap),
     contact_email: data.igroup_email,
     status: data.igroup_status,
-    class: data.igroup_class,
+    affiliation: data.igroup_class,
   }
 }
 

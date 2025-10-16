@@ -6,6 +6,7 @@ create table public.warriors (
   initiation_on date null,
   initiation_text text null,
   status character varying(50) null,
+  inner_essence_name text null,
   training_events jsonb null default '[]'::jsonb,
   staffed_events jsonb null default '[]'::jsonb,
   lead_events jsonb null default '[]'::jsonb,
