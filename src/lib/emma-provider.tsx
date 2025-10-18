@@ -13,12 +13,22 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { useAuth0 } from "./auth0-provider"
 import type { EmmaUserWithRelations } from "../../api/users"
 
+interface LocationData {
+  latitude: string | null
+  longitude: string | null
+  city: string | null
+  state: string | null
+  accuracy: string
+}
+
 interface EmmaContextType {
   emmaUser: EmmaUserWithRelations | null
   setEmmaUser: (user: EmmaUserWithRelations | null) => void
   isEmmaUserLoading: boolean
   loadEmmaUser: () => Promise<void>
   emmaUserError: string | null
+  location: LocationData | null
+  isLocationLoading: boolean
 }
 
 const EmmaContext = createContext<EmmaContextType | undefined>(undefined)
@@ -40,6 +50,8 @@ export const EmmaProvider = ({ children }: EmmaUserProviderProps) => {
   const [emmaUser, setEmmaUserState] = useState<EmmaUserWithRelations | null>(null)
   const [isEmmaUserLoading, setIsEmmaUserLoading] = useState(false)
   const [emmaUserError, setEmmaUserError] = useState<string | null>(null)
+  const [location, setLocation] = useState<LocationData | null>(null)
+  const [isLocationLoading, setIsLocationLoading] = useState(false)
 
   const loadEmmaUser = async () => {
     if (!auth0User?.email) {
@@ -83,9 +95,50 @@ export const EmmaProvider = ({ children }: EmmaUserProviderProps) => {
     }
   }
 
-  const setEmmaUser = (eu: EmmaUserWithRelations | null) => { 
+  const setEmmaUser = (eu: EmmaUserWithRelations | null) => {
     setEmmaUserState(eu)
     setEmmaUserError(null)
+  }
+
+  // Load geolocation from cookie or API
+  const loadGeolocation = async () => {
+    setIsLocationLoading(true)
+
+    try {
+      // Check if location cookie already exists
+      const cookies = document.cookie.split("; ")
+      const locationCookie = cookies.find((c) => c.startsWith("emma_location="))
+
+      if (locationCookie) {
+        const cookieValue = decodeURIComponent(locationCookie.split("=")[1])
+        const locationData = JSON.parse(cookieValue) as LocationData
+        setLocation(locationData)
+        console.log("[v0] Location loaded from cookie:", locationData)
+        setIsLocationLoading(false)
+        return
+      }
+
+      // No cookie found, fetch from API
+      console.log("[v0] No location cookie found, fetching from API...")
+      const response = await fetch("/api/geolocation")
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch geolocation: ${response.status}`)
+      }
+
+      const result = await response.json()
+      console.log("[v0] Geolocation API response:", result)
+
+      if (result.success && result.data) {
+        setLocation(result.data)
+        console.log("[v0] Location loaded from API:", result.data)
+      }
+    } catch (error) {
+      console.error("[v0] Error loading geolocation:", error)
+      // Don't throw - geolocation is optional
+    } finally {
+      setIsLocationLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -98,6 +151,11 @@ export const EmmaProvider = ({ children }: EmmaUserProviderProps) => {
     }
   }, [auth0Loading, isAuthenticated, auth0User?.email])
 
+  // Load geolocation on mount (runs once)
+  useEffect(() => {
+    loadGeolocation()
+  }, [])
+
   return (
     <EmmaContext.Provider
       value={{
@@ -106,6 +164,8 @@ export const EmmaProvider = ({ children }: EmmaUserProviderProps) => {
         isEmmaUserLoading,
         loadEmmaUser,
         emmaUserError,
+        location,
+        isLocationLoading,
       }}
     >
       {children}

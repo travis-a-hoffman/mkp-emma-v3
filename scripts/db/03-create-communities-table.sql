@@ -1,7 +1,7 @@
 create table public.communities (
   id uuid not null default gen_random_uuid (),
   name text not null,
-  code character varying(6) not null,
+  code text not null,
   description text null,
   area_id uuid null,
   coordinator_id uuid null,

@@ -1,6 +1,7 @@
 "use client"
 
 import { useAuth0 } from "../lib/auth0-provider"
+import { useEmma } from "../lib/emma-provider"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, LogIn, Info } from "lucide-react"
@@ -8,12 +9,23 @@ import { EmmaTitleBar } from "../components/emma/titlebar"
 import { EmmaCountdownTimer } from "../components/emma/countdown-timer"
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { useGroupStats } from "../hooks/useGroupStats"
+import { formatGroupsMessage } from "../lib/formatGroupsMessage"
 
 export default function Home() {
   const { user, error, isLoading, isAuthenticated, loginWithPopup } = useAuth0()
+  const { location } = useEmma()
   const navigate = useNavigate()
   const [nextEvent, setNextEvent] = useState<any>(null)
   const [eventLoading, setEventLoading] = useState(true)
+
+  // Fetch group stats with geolocation
+  const { stats: groupStats, isLoading: groupStatsLoading } = useGroupStats(
+    location?.latitude,
+    location?.longitude,
+    isAuthenticated,
+    25,
+  )
 
   useEffect(() => {
     const fetchNextEvent = async () => {
@@ -132,6 +144,26 @@ export default function Home() {
                 </div>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  <h2 className="text-xl font-semibold mb-4">Groups</h2>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6 cursor-pointer" onClick={() => navigate("/i-groups")}>
+                <div className="text-center">
+                  {groupStatsLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                      <span>Loading group statistics...</span>
+                    </div>
+                  ) : (
+                    formatGroupsMessage(groupStats, isAuthenticated)
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         ) : (
           <div className="max-w-md mx-auto text-center space-y-6">
@@ -173,6 +205,28 @@ export default function Home() {
                   <Info className="h-4 w-4 mr-2" />
                   Learn More
                 </Button>
+              </CardContent>
+            </Card>
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-shadow"
+              onClick={() => navigate("/groups")}
+            >
+              <CardHeader>
+                <CardTitle>
+                  <h2 className="text-xl font-semibold mb-4">Groups</h2>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="text-left">
+                  {groupStatsLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      <span className="text-sm">Loading...</span>
+                    </div>
+                  ) : (
+                    formatGroupsMessage(groupStats, isAuthenticated)
+                  )}
+                </div>
               </CardContent>
             </Card>
             <Card>
