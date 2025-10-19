@@ -43,6 +43,7 @@ const FGroupSchema = z.object({
   area_id: z.string().uuid().optional().nullable(),
   community_id: z.string().uuid().optional().nullable(),
   is_active: z.boolean().default(true),
+  established_on: z.string().optional().nullable(),
 })
 
 export type FGroupApiResponse = {

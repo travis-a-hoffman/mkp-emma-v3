@@ -1,6 +1,7 @@
 export interface Venue {
   id: string
   name: string
+  description?: string
   phone?: string
   email?: string
   website?: string
@@ -9,6 +10,7 @@ export interface Venue {
   primary_contact_id?: string
   facility_contact_id?: string
   supported_event_types?: string[]
+  is_private_residence: boolean
   is_active: boolean
   created_at: string
   updated_at: string

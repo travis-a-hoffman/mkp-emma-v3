@@ -32,6 +32,7 @@ const FGroupUpdateSchema = z.object({
   area_id: z.string().uuid().optional().nullable(),
   community_id: z.string().uuid().optional().nullable(),
   is_active: z.boolean().optional(),
+  established_on: z.string().optional().nullable(),
 })
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

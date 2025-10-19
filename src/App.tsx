@@ -46,6 +46,8 @@ import JoinProfileImport from "./pages/join/JoinProfileImport"
 import JoinProfileSetup from "./pages/join/JoinProfileSetup"
 import AdminGroups from "@/src/pages/admin/AdminGroups.tsx";
 import AdminIGroups from "@/src/pages/admin/AdminIGroups.tsx";
+import GroupNearby from "@/src/pages/GroupNearby.tsx";
+import IGroupNearby from "@/src/pages/IGroupNearby.tsx";
 
 function App() {
   return (
@@ -56,6 +58,10 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/groups/nearby" element={<GroupNearby />} />
+            <Route path="/i-groups/nearby" element={<IGroupNearby />} />
+            {/*<Route path="/i-group/" element={<IGroupSearch />} />*/}
+            {/*<Route path="/i-group/:uuid" element={{<IGroup />} />*/}
             <Route path="/nearby" element={<Nearby />} />
             <Route path="/upcoming" element={<Upcoming />} />
             <Route path="/staffing" element={<StaffingSearch />} />
@@ -95,7 +101,7 @@ function App() {
             <Route path="/admin/friends" element={<AdminFriends />} />
             <Route path="/admin/affiliates" element={<AdminAffiliates />} />
             <Route path="/admin/groups" element={<AdminGroups />} />
-            <Route path="/admin/i-groups" element={<AdminIGroups />} />
+            <Route path="/admin/i-groups/" element={<AdminIGroups />} />
           </Routes>
         </MkpConnectProvider>
       </EmmaProvider>

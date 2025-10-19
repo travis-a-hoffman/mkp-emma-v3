@@ -15,6 +15,7 @@ create table public.groups (
   created_at timestamp with time zone null default now(),
   updated_at timestamp with time zone null default now(),
   deleted_at timestamp with time zone null,
+  established_on date null,
   photo_url text null,
   latitude numeric(10, 6) null,
   longitude numeric(10, 6) null,

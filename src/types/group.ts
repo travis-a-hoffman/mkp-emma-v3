@@ -64,18 +64,35 @@ export interface Group {
   is_publicly_listed: boolean
   public_contact_id?: string | null
   primary_contact_id?: string | null
+  latitude?: number | null
+  longitude?: number | null
   is_active: boolean
   created_at: string
   updated_at: string
   deleted_at?: string | null
-  latitude?: number | null
-  longitude?: number | null
+  established_on?: string | null
   // TODO Do I need to genericize this? Or make it "any" type?
   mkpconnect_data?: MkpConnectIGroup | null
 }
 
 export interface GroupWithRelations extends Group {
-  venue?: Venue | null
+  venue?: {
+    id: string
+    name: string
+    phone?: string | null
+    email?: string | null
+    timezone: string
+    website?: string | null
+    physical_address?: {
+      id: string
+      address_1: string
+      address_2: string | null
+      city: string
+      state: string
+      postal_code: string
+      country: string
+    } | null
+  } | null
   public_contact?: Person | null
   primary_contact?: Person | null
 }
@@ -98,7 +115,23 @@ export interface IGroup extends Group {
 }
 
 export interface IGroupWithRelations extends IGroup {
-  venue?: Venue | null
+  venue?: {
+    id: string
+    name: string
+    phone?: string | null
+    email?: string | null
+    timezone: string
+    website?: string | null
+    physical_address?: {
+      id: string
+      address_1: string
+      address_2: string | null
+      city: string
+      state: string
+      postal_code: string
+      country: string
+    } | null
+  } | null
   public_contact?: Person | null
   primary_contact?: Person | null
   area: Area | null

@@ -22,6 +22,7 @@ interface Venue {
   rejected_note?: string
   is_nudity: boolean
   is_rejected: boolean
+  is_private_residence: boolean
   is_active: boolean
   created_at: string
   updated_at: string
@@ -65,6 +66,7 @@ const VenueSchema = z.object({
   rejected_note: z.string().optional().nullable(),
   is_nudity: z.boolean().default(false),
   is_rejected: z.boolean().default(false),
+  is_private_residence: z.boolean().default(false),
   is_active: z.boolean().default(true),
 })
 
@@ -181,6 +183,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             rejected_note: validatedData.rejected_note || null,
             is_nudity: validatedData.is_nudity,
             is_rejected: validatedData.is_rejected,
+            is_private_residence: validatedData.is_private_residence,
             is_active: validatedData.is_active,
           })
           .select()

@@ -202,7 +202,8 @@ RETURNS TABLE (
   is_active BOOLEAN,
   deleted_at TIMESTAMP WITH TIME ZONE,
   latitude NUMERIC,
-  longitude NUMERIC
+  longitude NUMERIC,
+  distance_meters DOUBLE PRECISION
 ) AS $$
 BEGIN
   RETURN QUERY
@@ -212,7 +213,11 @@ BEGIN
     g.is_active,
     g.deleted_at,
     g.latitude,
-    g.longitude
+    g.longitude,
+    ST_DistanceSphere(
+      ST_MakePoint(g.longitude::DOUBLE PRECISION, g.latitude::DOUBLE PRECISION),
+      ST_MakePoint(point_lon, point_lat)
+    ) AS distance_meters
   FROM groups g
   WHERE
     g.latitude IS NOT NULL
@@ -227,10 +232,11 @@ $$ LANGUAGE plpgsql;
 
 **Notes:**
 - Uses `ST_DistanceSphere` for accurate distance calculation on Earth's surface
-- Distance is calculated in meters
+- Distance is calculated in meters and returned as `distance_meters` field
 - Returns all groups (active and inactive, including soft-deleted)
 - The API layer filters by `is_active` and `deleted_at` after retrieval
 - Coordinate order is (longitude, latitude)
+- Distance is calculated twice (once for filtering, once for return value) but PostgreSQL query optimizer should handle this efficiently
 
 ## Function 4: find_igroups_within_radius
 
@@ -246,7 +252,8 @@ RETURNS TABLE (
   id UUID,
   is_active BOOLEAN,
   is_accepting_initiated_visitors BOOLEAN,
-  is_accepting_uninitiated_visitors BOOLEAN
+  is_accepting_uninitiated_visitors BOOLEAN,
+  distance_meters DOUBLE PRECISION
 ) AS $$
 BEGIN
   RETURN QUERY
@@ -254,7 +261,11 @@ BEGIN
     ig.id,
     ig.is_active,
     ig.is_accepting_initiated_visitors,
-    ig.is_accepting_uninitiated_visitors
+    ig.is_accepting_uninitiated_visitors,
+    ST_DistanceSphere(
+      ST_MakePoint(g.longitude::DOUBLE PRECISION, g.latitude::DOUBLE PRECISION),
+      ST_MakePoint(point_lon, point_lat)
+    ) AS distance_meters
   FROM i_groups ig
   INNER JOIN groups g ON ig.id = g.id
   WHERE
@@ -272,8 +283,9 @@ $$ LANGUAGE plpgsql;
 **Notes:**
 - Joins `i_groups` with `groups` to access latitude/longitude
 - Excludes soft-deleted groups (`deleted_at IS NULL`)
-- Returns `is_active`, `is_accepting_initiated_visitors`, and `is_accepting_uninitiated_visitors` for filtering
+- Returns `is_active`, `is_accepting_initiated_visitors`, `is_accepting_uninitiated_visitors`, and `distance_meters`
 - Uses `ST_DistanceSphere` for distance calculation
+- Distance is calculated twice (once for filtering, once for return value) but PostgreSQL query optimizer should handle this efficiently
 
 ## Deployment Instructions
 

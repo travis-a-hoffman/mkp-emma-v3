@@ -25,6 +25,7 @@ const UpdateGroupSchema = z.object({
   public_contact_id: z.string().uuid().nullable().optional(),
   primary_contact_id: z.string().uuid().nullable().optional(),
   is_active: z.boolean().optional(),
+  established_on: z.string().nullable().optional(),
 })
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

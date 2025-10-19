@@ -21,6 +21,7 @@ const VenueUpdateSchema = z.object({
   rejected_note: z.string().optional().nullable(),
   is_nudity: z.boolean().optional(),
   is_rejected: z.boolean().optional(),
+  is_private_residence: z.boolean().optional(),
   is_active: z.boolean().optional(),
 })
 

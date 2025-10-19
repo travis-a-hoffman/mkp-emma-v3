@@ -13,6 +13,7 @@ create table public.venues (
   longitude numeric(11, 8) null,
   is_nudity boolean not null default false,
   is_rejected boolean not null default false,
+  is_private_residence boolean not null default false,
   is_active boolean not null default true,
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
@@ -45,6 +46,8 @@ create index IF not exists idx_venues_location on public.venues using btree (lat
 create index IF not exists idx_venues_is_active on public.venues using btree (is_active) TABLESPACE pg_default;
 
 create index IF not exists idx_venues_is_rejected on public.venues using btree (is_rejected) TABLESPACE pg_default;
+
+create index IF not exists idx_venues_is_private_residence on public.venues using btree (is_private_residence) TABLESPACE pg_default;
 
 create index IF not exists idx_venues_area on public.venues using btree (area_id) TABLESPACE pg_default;
 

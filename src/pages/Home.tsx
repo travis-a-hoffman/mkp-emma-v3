@@ -209,11 +209,11 @@ export default function Home() {
             </Card>
             <Card
               className="cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => navigate("/groups")}
+              onClick={() => isAuthenticated? navigate("/i-groups"): navigate("/groups")}
             >
               <CardHeader>
                 <CardTitle>
-                  <h2 className="text-xl font-semibold mb-4">Groups</h2>
+                  <h2 className="text-xl font-semibold mb-4">{isAuthenticated? "I-Groups": "Groups"}</h2>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">

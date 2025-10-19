@@ -29,6 +29,7 @@ const IGroupUpdateSchema = z.object({
   area_id: z.string().uuid().optional().nullable(),
   community_id: z.string().uuid().optional().nullable(),
   is_active: z.boolean().optional(),
+  established_on: z.string().optional().nullable(),
 })
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -81,6 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             created_at,
             updated_at,
             deleted_at,
+            established_on,
             i_groups!inner (
               is_accepting_initiated_visitors,
               is_accepting_uninitiated_visitors,
@@ -248,6 +250,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             created_at,
             updated_at,
             deleted_at,
+            established_on,
             i_groups!inner (
               is_accepting_initiated_visitors,
               is_accepting_uninitiated_visitors,

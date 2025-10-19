@@ -10,6 +10,21 @@ interface IGroupWithRelations extends IGroup {
   area: Area | null
   community: Community | null
   venue: Venue | null
+  distance?: number
+  distance_units?: string
+}
+
+/**
+ * Parse radius parameter which may have "mi" suffix (e.g., "25mi", "25.00mi")
+ * Returns radius in miles as a number, or null if invalid
+ */
+function parseRadius(radiusParam: string | string[] | undefined): number | null {
+  if (!radiusParam) return null
+  const radiusStr = Array.isArray(radiusParam) ? radiusParam[0] : radiusParam
+  // Remove "mi" suffix if present
+  const cleanRadius = radiusStr.replace(/mi$/i, "").trim()
+  const radius = parseFloat(cleanRadius)
+  return isNaN(radius) ? null : radius
 }
 
 const IGroupSchema = z.object({
@@ -40,6 +55,7 @@ const IGroupSchema = z.object({
   area_id: z.string().uuid().optional().nullable(),
   community_id: z.string().uuid().optional().nullable(),
   is_active: z.boolean().default(true),
+  established_on: z.string().optional().nullable(),
 })
 
 export type IGroupApiResponse = {
@@ -74,7 +90,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case "GET":
         console.log("[v0] GET /api/i-groups - Fetching all integration groups")
 
-        const { active, search } = query
+        const { active, search, lat, latitude, lon, longitude, rad, radius, by, order } = query
+
+        // Parse geolocation parameters
+        const latParam = lat || latitude
+        const lonParam = lon || longitude
+        const radParam = rad || radius
+        const hasGeolocation = latParam && lonParam
+
+        // Parse sorting parameters
+        const sortBy = Array.isArray(by) ? by[0] : (by || (hasGeolocation ? "distance" : "created_at"))
+        const sortOrder = Array.isArray(order) ? order[0] : (order || (sortBy === "distance" ? "ascending" : "descending"))
+
+        // Handle geolocation-based filtering
+        let distanceMap = new Map<string, number>()
+        let filteredIds: string[] | null = null
+
+        if (hasGeolocation) {
+          const parsedLat = parseFloat(Array.isArray(latParam) ? latParam[0] : (latParam as string))
+          const parsedLon = parseFloat(Array.isArray(lonParam) ? lonParam[0] : (lonParam as string))
+          const radiusMiles = parseRadius(radParam) || 50
+          const radiusMeters = radiusMiles * 1609.34
+
+          if (!isNaN(parsedLat) && !isNaN(parsedLon)) {
+            console.log(`[v0] Geolocation filter: lat=${parsedLat}, lon=${parsedLon}, radius=${radiusMiles}mi`)
+
+            const { data: nearbyGroups, error: nearbyError } = await supabase.rpc("find_igroups_within_radius", {
+              point_lon: parsedLon,
+              point_lat: parsedLat,
+              radius_meters: radiusMeters,
+            })
+
+            if (!nearbyError && nearbyGroups && nearbyGroups.length > 0) {
+              filteredIds = nearbyGroups.map((g: any) => g.id)
+              nearbyGroups.forEach((g: any) => {
+                distanceMap.set(g.id, g.distance_meters)
+              })
+              console.log(`[v0] Found ${filteredIds!.length} i-groups within ${radiusMiles} miles`)
+            } else if (!nearbyError) {
+              // No groups found within radius, return empty result
+              console.log(`[v0] No i-groups found within ${radiusMiles} miles`)
+              return res.json({
+                success: true,
+                data: [],
+                count: 0,
+              })
+            } else {
+              console.error("[v0] RPC error:", nearbyError)
+            }
+          }
+        }
+
         let dbQuery = supabase.from("groups").select(`
             id,
             name,
@@ -129,6 +195,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             primary_contact:people!groups_primary_contact_id_fkey(id, first_name, last_name, email, phone)
           `)
 
+        // Filter by geolocation IDs if provided
+        if (filteredIds) {
+          dbQuery = dbQuery.in("id", filteredIds)
+        }
+
         if (active !== undefined) {
           const isActive = active === "true"
           dbQuery = dbQuery.eq("i_groups.is_active", isActive)
@@ -141,7 +212,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
 
-        const { data, error } = await dbQuery.order("created_at", { ascending: false })
+        // Only apply database-level ordering if not sorting by distance
+        // (distance sorting requires the computed distance field, so we do it in-memory)
+        const { data, error } = sortBy === "distance"
+          ? await dbQuery
+          : await dbQuery.order(
+              sortBy === "name" ? "name" : "created_at",
+              { ascending: sortOrder === "ascending" }
+            )
 
         if (error) {
           console.error("[v0] Database error:", error)
@@ -151,10 +229,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           })
         }
 
-        const transformedData =
+        let transformedData =
           data?.map((group: any) => {
             const iGroupData = group.i_groups as any
-            return {
+            const baseData = {
               id: group.id,
               name: group.name,
               description: group.description,
@@ -186,7 +264,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               public_contact: group.public_contact,
               primary_contact: group.primary_contact,
             }
+
+            // Add distance fields if geolocation was used
+            if (distanceMap.has(group.id)) {
+              return {
+                ...baseData,
+                distance: distanceMap.get(group.id),
+                distance_units: "meters",
+              }
+            }
+
+            return baseData
           }) || []
+
+        // Sort by distance if requested (in-memory sorting)
+        if (sortBy === "distance" && distanceMap.size > 0) {
+          transformedData.sort((a: any, b: any) => {
+            const distA = a.distance || Infinity
+            const distB = b.distance || Infinity
+            return sortOrder === "ascending" ? distA - distB : distB - distA
+          })
+        }
 
         return res.json({
           success: true,
