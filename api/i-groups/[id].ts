@@ -128,13 +128,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           })
         }
 
+        // Expand members array to include full Person details
+        const memberIds = (data.members as string[]) || []
+        let memberDetails: any[] = []
+
+        if (memberIds.length > 0) {
+          const { data: membersData, error: membersError } = await supabase
+            .from("people")
+            .select(`
+              id,
+              first_name,
+              middle_name,
+              last_name,
+              email,
+              phone,
+              photo_url,
+              is_active,
+              warriors (
+                status,
+                area_id,
+                community_id
+              )
+            `)
+            .in("id", memberIds)
+
+          if (!membersError && membersData) {
+            memberDetails = membersData
+          } else if (membersError) {
+            console.error("[v0] Error fetching members:", membersError)
+          }
+        }
+
         const iGroupData = data.i_groups as any
         const transformedData = {
           id: data.id,
           name: data.name,
           description: data.description,
           url: data.url,
-          members: data.members,
+          members: memberDetails,
+          member_ids: memberIds,
           is_accepting_new_members: data.is_accepting_new_members,
           membership_criteria: data.membership_criteria,
           venue_id: data.venue_id,
@@ -296,13 +328,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           })
         }
 
+        // Expand members array for updated data
+        const updatedMemberIds = (updatedData.members as string[]) || []
+        let updatedMemberDetails: any[] = []
+
+        if (updatedMemberIds.length > 0) {
+          const { data: updatedMembersData, error: updatedMembersError } = await supabase
+            .from("people")
+            .select(`
+              id,
+              first_name,
+              middle_name,
+              last_name,
+              email,
+              phone,
+              photo_url,
+              is_active,
+              warriors (
+                status,
+                area_id,
+                community_id
+              )
+            `)
+            .in("id", updatedMemberIds)
+
+          if (!updatedMembersError && updatedMembersData) {
+            updatedMemberDetails = updatedMembersData
+          }
+        }
+
         const updatedIGroupData = updatedData.i_groups as any
         const transformedUpdatedData = {
           id: updatedData.id,
           name: updatedData.name,
           description: updatedData.description,
           url: updatedData.url,
-          members: updatedData.members,
+          members: updatedMemberDetails,
+          member_ids: updatedMemberIds,
           is_accepting_new_members: updatedData.is_accepting_new_members,
           membership_criteria: updatedData.membership_criteria,
           venue_id: updatedData.venue_id,

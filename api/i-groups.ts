@@ -90,7 +90,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case "GET":
         console.log("[v0] GET /api/i-groups - Fetching all integration groups")
 
-        const { active, search, lat, latitude, lon, longitude, rad, radius, by, order } = query
+        const {
+          active,
+          search,
+          name,
+          city,
+          state,
+          zipcode,
+          initiated,
+          uninitiated,
+          days,
+          dates,
+          time,
+          lat,
+          latitude,
+          lon,
+          longitude,
+          rad,
+          radius,
+          by,
+          order
+        } = query
 
         // Parse geolocation parameters
         const latParam = lat || latitude
@@ -205,11 +225,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           dbQuery = dbQuery.eq("i_groups.is_active", isActive)
         }
 
-        if (search && typeof search === "string") {
+        // Name search (specific to group name only)
+        if (name && typeof name === "string") {
+          const nameTerm = Array.isArray(name) ? name[0] : name.trim()
+          if (nameTerm.length > 0) {
+            dbQuery = dbQuery.ilike("name", `%${nameTerm}%`)
+          }
+        }
+
+        // Legacy search parameter (searches both name and description)
+        if (search && typeof search === "string" && !name) {
           const searchTerm = search.trim()
           if (searchTerm.length > 0) {
             dbQuery = dbQuery.or(`name.ilike.*${searchTerm}*,description.ilike.*${searchTerm}*`)
           }
+        }
+
+        // Visitor type filters
+        if (initiated !== undefined) {
+          const acceptsInitiated = initiated === "true"
+          dbQuery = dbQuery.eq("i_groups.is_accepting_initiated_visitors", acceptsInitiated)
+        }
+
+        if (uninitiated !== undefined) {
+          const acceptsUninitiated = uninitiated === "true"
+          dbQuery = dbQuery.eq("i_groups.is_accepting_uninitiated_visitors", acceptsUninitiated)
         }
 
         // Only apply database-level ordering if not sorting by distance
@@ -276,6 +316,104 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             return baseData
           }) || []
+
+        // Apply city/state filtering (in-memory)
+        if (city || state || zipcode) {
+          transformedData = transformedData.filter((group: any) => {
+            const venueAddress = group.venue?.physical_address
+            if (!venueAddress) return false
+
+            // Zipcode filter (exact match)
+            if (zipcode) {
+              const zipcodeParam = Array.isArray(zipcode) ? zipcode[0] : zipcode
+              return venueAddress.postal_code === zipcodeParam.trim()
+            }
+
+            // City and/or state filter (case-insensitive)
+            let matches = true
+            if (city) {
+              const cityParam = Array.isArray(city) ? city[0] : city
+              matches = matches && venueAddress.city.toLowerCase() === cityParam.trim().toLowerCase()
+            }
+            if (state) {
+              const stateParam = Array.isArray(state) ? state[0] : state
+              matches = matches && venueAddress.state.toLowerCase() === stateParam.trim().toLowerCase()
+            }
+            return matches
+          })
+        }
+
+        // Apply day-of-week filtering (in-memory)
+        if (days) {
+          const daysParam = Array.isArray(days) ? days[0] : days
+          const requestedDays = daysParam.split(/[\s,+]+/).filter(Boolean)
+          const dayMap: Record<string, number> = {
+            'sun': 0, 'sunday': 0,
+            'mon': 1, 'monday': 1,
+            'tue': 2, 'tuesday': 2,
+            'wed': 3, 'wednesday': 3,
+            'thu': 4, 'thursday': 4,
+            'fri': 5, 'friday': 5,
+            'sat': 6, 'saturday': 6
+          }
+          const requestedDayNumbers = requestedDays.map(d => dayMap[d.toLowerCase()]).filter(n => n !== undefined)
+
+          transformedData = transformedData.filter((group: any) => {
+            const scheduleEvents = group.schedule_events || []
+            if (!Array.isArray(scheduleEvents) || scheduleEvents.length === 0) return false
+
+            return scheduleEvents.some((event: any) => {
+              if (!event.start) return false
+              const eventDate = new Date(event.start)
+              const eventDay = eventDate.getDay()
+              return requestedDayNumbers.includes(eventDay)
+            })
+          })
+        }
+
+        // Apply specific date filtering (in-memory)
+        if (dates) {
+          const datesParam = Array.isArray(dates) ? dates[0] : dates
+          const requestedDate = new Date(datesParam)
+
+          transformedData = transformedData.filter((group: any) => {
+            const scheduleEvents = group.schedule_events || []
+            if (!Array.isArray(scheduleEvents) || scheduleEvents.length === 0) return false
+
+            return scheduleEvents.some((event: any) => {
+              if (!event.start) return false
+              const eventStart = new Date(event.start)
+              const eventEnd = event.end ? new Date(event.end) : eventStart
+
+              // Check if requested date falls within any event
+              return requestedDate >= eventStart && requestedDate <= eventEnd
+            })
+          })
+        }
+
+        // Apply time-of-day filtering (in-memory)
+        if (time) {
+          const timeParam = Array.isArray(time) ? time[0] : time
+          const requestedTime = new Date(timeParam)
+          const requestedHour = requestedTime.getHours()
+          const requestedMinute = requestedTime.getMinutes()
+
+          transformedData = transformedData.filter((group: any) => {
+            const scheduleEvents = group.schedule_events || []
+            if (!Array.isArray(scheduleEvents) || scheduleEvents.length === 0) return false
+
+            return scheduleEvents.some((event: any) => {
+              if (!event.start) return false
+              const eventStart = new Date(event.start)
+              const eventHour = eventStart.getHours()
+              const eventMinute = eventStart.getMinutes()
+
+              // Match within 1 hour window
+              const timeDiffMinutes = Math.abs((eventHour * 60 + eventMinute) - (requestedHour * 60 + requestedMinute))
+              return timeDiffMinutes <= 60
+            })
+          })
+        }
 
         // Sort by distance if requested (in-memory sorting)
         if (sortBy === "distance" && distanceMap.size > 0) {

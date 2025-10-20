@@ -48,6 +48,8 @@ import AdminGroups from "@/src/pages/admin/AdminGroups.tsx";
 import AdminIGroups from "@/src/pages/admin/AdminIGroups.tsx";
 import GroupNearby from "@/src/pages/GroupNearby.tsx";
 import IGroupNearby from "@/src/pages/IGroupNearby.tsx";
+import IGroupSearch from "@/src/pages/IGroupSearch.tsx";
+import IGroup from "@/src/pages/IGroup.tsx";
 
 function App() {
   return (
@@ -59,9 +61,9 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/groups/nearby" element={<GroupNearby />} />
-            <Route path="/i-groups/nearby" element={<IGroupNearby />} />
-            {/*<Route path="/i-group/" element={<IGroupSearch />} />*/}
-            {/*<Route path="/i-group/:uuid" element={{<IGroup />} />*/}
+            <Route path="/i-group/nearby" element={<IGroupNearby />} />
+            <Route path="/i-group" element={<IGroupSearch />} />
+            <Route path="/i-group/:uuid" element={<IGroup />} />
             <Route path="/nearby" element={<Nearby />} />
             <Route path="/upcoming" element={<Upcoming />} />
             <Route path="/staffing" element={<StaffingSearch />} />

@@ -75,8 +75,9 @@ export default function IGroupNearby() {
   }
 
   const handleGroupClick = (groupId: string) => {
-    // TODO: Create i-group detail page
-    console.log("Navigate to i-group:", groupId)
+    navigate(`/i-group/${groupId}`, {
+      state: { backLink: { href: "/i-group/nearby", label: "Back to Nearby I-Groups" } }
+    })
   }
 
   if (isLocationLoading) {

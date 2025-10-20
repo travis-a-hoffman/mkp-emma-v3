@@ -136,6 +136,7 @@ export interface IGroupWithRelations extends IGroup {
   primary_contact?: Person | null
   area: Area | null
   community: Community | null
+  member_ids?: string[] // Original UUID array from database
 }
 
 export interface FGroup<W = any> extends Group {
