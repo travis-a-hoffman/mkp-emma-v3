@@ -38,7 +38,9 @@
     "import:venues": "tsx scripts/import-venues.ts",
     "transform:groups": "tsx scripts/transform-groups.ts --source-host mkpconnect.org --host mkp-emma-v3.vercel.app",
     "transform:igroup-membership": "tsx scripts/transform-igroup-membership.ts",
-    "import:groups": "tsx scripts/import-groups.ts"
+    "import:groups": "tsx scripts/import-groups.ts",
+    "import:us-cities": "tsx scripts/import-us-cities.ts",
+    "import:us-zipcodes": "tsx scripts/import-us-zipcodes.ts"
   },
   "dependencies": {
     "@auth0/auth0-spa-js": "latest",
@@ -76,9 +78,11 @@
     "@supabase/supabase-js": "latest",
     "@tailwindcss/postcss": "^4.1.14",
     "@vercel/blob": "latest",
+    "adm-zip": "^0.5.10",
     "autoprefixer": "^10.4.21",
     "civicrm": "latest",
     "class-variance-authority": "^0.7.1",
+    "csv-parse": "^5.5.3",
     "clsx": "^2.1.1",
     "cmdk": "latest",
     "concurrently": "^8.2.2",
@@ -120,6 +124,7 @@
     "@turf/flatten": "^7.2.0",
     "@turf/helpers": "^7.2.0",
     "@turf/union": "^7.2.0",
+    "@types/adm-zip": "^0.5.5",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.23",
     "@types/node": "^22",

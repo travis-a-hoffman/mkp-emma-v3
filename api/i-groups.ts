@@ -112,10 +112,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           order
         } = query
 
+        // Geography-based coordinate lookup for city/state or zipcode searches
+        let geoLat: string | string[] | undefined = lat || latitude
+        let geoLon: string | string[] | undefined = lon || longitude
+        let geoRad: string | string[] | undefined = rad || radius
+
+        // Look up coordinates from city and state
+        if (city && state && !geoLat && !geoLon) {
+          const cityParam = Array.isArray(city) ? city[0] : city
+          const stateParam = Array.isArray(state) ? state[0] : state
+
+          console.log(`[v0] Looking up coordinates for city=${cityParam}, state=${stateParam}`)
+
+          const { data: cityData, error: cityError } = await supabase
+            .from("geography_us_cities")
+            .select("lat, lng")
+            .ilike("city", cityParam.trim())
+            .ilike("state_id", stateParam.trim())
+            .limit(1)
+            .single()
+
+          if (!cityError && cityData) {
+            geoLat = String(cityData.lat)
+            geoLon = String(cityData.lng)
+            geoRad = "25" // Default to 25 miles for city searches
+            console.log(`[v0] Found coordinates: lat=${geoLat}, lon=${geoLon}`)
+          } else {
+            console.log(`[v0] City not found in geography database:`, cityError?.message || "No results")
+          }
+        }
+
+        // Look up coordinates from zipcode
+        if (zipcode && !geoLat && !geoLon) {
+          const zipcodeParam = Array.isArray(zipcode) ? zipcode[0] : zipcode
+
+          console.log(`[v0] Looking up coordinates for zipcode=${zipcodeParam}`)
+
+          const { data: zipcodeData, error: zipcodeError } = await supabase
+            .from("geography_us_zipcodes")
+            .select("lat, lng")
+            .eq("zip", zipcodeParam.trim())
+            .limit(1)
+            .single()
+
+          if (!zipcodeError && zipcodeData) {
+            geoLat = String(zipcodeData.lat)
+            geoLon = String(zipcodeData.lng)
+            geoRad = "25" // Default to 25 miles for zipcode searches
+            console.log(`[v0] Found coordinates: lat=${geoLat}, lon=${geoLon}`)
+          } else {
+            console.log(`[v0] Zipcode not found in geography database:`, zipcodeError?.message || "No results")
+          }
+        }
+
         // Parse geolocation parameters
-        const latParam = lat || latitude
-        const lonParam = lon || longitude
-        const radParam = rad || radius
+        const latParam = geoLat
+        const lonParam = geoLon
+        const radParam = geoRad
         const hasGeolocation = latParam && lonParam
 
         // Parse sorting parameters
@@ -316,32 +369,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             return baseData
           }) || []
-
-        // Apply city/state filtering (in-memory)
-        if (city || state || zipcode) {
-          transformedData = transformedData.filter((group: any) => {
-            const venueAddress = group.venue?.physical_address
-            if (!venueAddress) return false
-
-            // Zipcode filter (exact match)
-            if (zipcode) {
-              const zipcodeParam = Array.isArray(zipcode) ? zipcode[0] : zipcode
-              return venueAddress.postal_code === zipcodeParam.trim()
-            }
-
-            // City and/or state filter (case-insensitive)
-            let matches = true
-            if (city) {
-              const cityParam = Array.isArray(city) ? city[0] : city
-              matches = matches && venueAddress.city.toLowerCase() === cityParam.trim().toLowerCase()
-            }
-            if (state) {
-              const stateParam = Array.isArray(state) ? state[0] : state
-              matches = matches && venueAddress.state.toLowerCase() === stateParam.trim().toLowerCase()
-            }
-            return matches
-          })
-        }
 
         // Apply day-of-week filtering (in-memory)
         if (days) {
